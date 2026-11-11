@@ -50,7 +50,7 @@ const __dirname = path.dirname(__filename);
 
 // --- CORS CONFIGURATION ---
 
-const allowedOrigins = ["http://localhost:5173",process.env.FRONTEND_ORIGIN
+const allowedOrigins = [process.env.FRONTEND_ORIGIN
 ].filter(Boolean);
 
 app.use(
