@@ -1,6 +1,7 @@
 
 import { ShopRequest } from "../../modules/shopRequestSchema.js";
 import bcrypt from 'bcrypt';
+import { commitUploadedFiles } from '../../utils/uploadCleanup.js';
 
 export const createShopRequest = async (req, res, next) => {
   try {
@@ -78,6 +79,7 @@ export const createShopRequest = async (req, res, next) => {
       password: hashedPassword
     });
 
+    commitUploadedFiles(req);
     res.status(201).json({
       success: true,
       message: 'Shop creation request along with documents submitted successfully.',

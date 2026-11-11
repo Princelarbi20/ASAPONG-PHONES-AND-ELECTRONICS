@@ -1,6 +1,7 @@
 import { Product } from "../../modules/productSchema.js";
 import { normalizeUploadedImagePaths } from "../../utils/normalizeImagePaths.js";
 import { getCloudinaryUploadMeta } from "../../utils/cloudinaryHelpers.js";
+import { commitUploadedFiles } from "../../utils/uploadCleanup.js";
 
 export const addProductController = async (req, res, next) => {
   try {
@@ -87,6 +88,8 @@ export const addProductController = async (req, res, next) => {
         });
       }
 
+      commitUploadedFiles(req);
+
       return res.status(200).json({
         success: true,
         message: "Product updated successfully",
@@ -109,6 +112,8 @@ export const addProductController = async (req, res, next) => {
         specifications: parsedSpecifications,
         newArrival: isNewArrival,
       });
+
+      commitUploadedFiles(req);
 
       return res.status(201).json({
         success: true,

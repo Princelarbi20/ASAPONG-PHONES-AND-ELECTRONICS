@@ -1,6 +1,7 @@
 import { Register } from "../../modules/userRegister.js";
 import bcrypt from "bcrypt";
 import { isValidPassword } from "../../middleware/requestValidation.js";
+import { clearAuthCookies } from '../../utils/authCookies.js';
 
 export const resetPasswordController = async (req, res) => {
     try {
@@ -42,12 +43,14 @@ export const resetPasswordController = async (req, res) => {
         // 3. Hash the new password securely
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(newPassword, salt);
+        user.tokenVersion = (user.tokenVersion || 0) + 1;
 
         // 4. Clear out the reset token fields so they can't reuse the link
         user.resetPasswordToken = null;
         user.resetPasswordExpires = null;
         
         await user.save();
+        clearAuthCookies(res);
 
         return res.status(200).json({
             success: true,

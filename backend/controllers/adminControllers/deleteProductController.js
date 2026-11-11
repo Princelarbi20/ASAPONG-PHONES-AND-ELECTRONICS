@@ -18,7 +18,10 @@ export const deleteProductController = async (req, res, next) => {
       });
     }
 
-    // 2. Delete images from Cloudinary by explicit public IDs first
+    // 2. Remove the database record first so a failed DB operation cannot leave it pointing at deleted images.
+    await Product.findByIdAndDelete(id);
+
+    // 3. Delete images from Cloudinary by explicit public IDs first
     if (Array.isArray(product.imagePublicIds) && product.imagePublicIds.length > 0) {
       for (const publicId of product.imagePublicIds) {
         try {
@@ -59,9 +62,6 @@ export const deleteProductController = async (req, res, next) => {
         }
       }
     }
-
-    // 3. Remove the document from MongoDB
-    await Product.findByIdAndDelete(id);
 
     res.status(200).json({
       success: true,

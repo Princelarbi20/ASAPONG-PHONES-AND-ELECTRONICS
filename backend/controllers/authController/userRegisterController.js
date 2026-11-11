@@ -1,8 +1,6 @@
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { randomInt } from "crypto";
 import { Register } from "../../modules/userRegister.js";
-import { setAuthCookies } from "../../utils/authCookies.js";
 import sendEmail from "../../utils/nodemailer.js";
 import { escapeHtml } from "../../utils/escapeHtml.js";
 
@@ -95,24 +93,7 @@ export const userRegisterController = async (req, res) => {
 
         await newUser.save();
 
-        // 5. Generate Authentication Tokens
-        const tokenPayload = { id: newUser._id, role: newUser.role };
-
-        const token = jwt.sign(
-            tokenPayload,
-            process.env.ACCESS_TOKEN_SECRET,
-            { expiresIn: process.env.ACCESS_TOKEN_EXPIRE }
-        );
-
-        const refreshToken = jwt.sign(
-            tokenPayload,
-            process.env.REFRESH_TOKEN_SECRET,
-            { expiresIn: process.env.REFRESH_TOKEN_EXPIRE }
-        );
-
-        setAuthCookies(res, token, refreshToken);
-
-        // 6. Send Styled Verification Email
+        // 5. Send Styled Verification Email
         try {
             await sendEmail({
                 to: newUser.email,
@@ -180,7 +161,7 @@ export const userRegisterController = async (req, res) => {
             console.error("Failed to send verification email:", emailError);
         }
 
-        // 7. Return Successful Response
+        // 6. Return Successful Response
         return res.status(201).json({
             success: true,
             message: "Registration successful. Please verify the OTP sent to your email.",

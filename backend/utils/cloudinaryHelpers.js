@@ -1,21 +1,24 @@
 import { v2 as cloudinary } from "cloudinary";
 
 const cloudinaryConfigured = process.env.NODE_ENV !== 'test' && Boolean(
-  process.env.CLOUDINARY_NAME &&
-  process.env.CLOUDINARY_API_KEY &&
-  process.env.CLOUDINARY_API_SECRET
+  process.env.CLOUDINARY_NAME?.trim() &&
+  process.env.CLOUDINARY_API_KEY?.trim() &&
+  process.env.CLOUDINARY_API_SECRET?.trim()
 );
 
 if (cloudinaryConfigured) {
   cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
+    cloud_name: process.env.CLOUDINARY_NAME.trim(),
+    api_key: process.env.CLOUDINARY_API_KEY.trim(),
+    api_secret: process.env.CLOUDINARY_API_SECRET.trim(),
   });
 }
 
 export const isCloudinaryUrl = (imagePath) =>
   typeof imagePath === 'string' && /^https?:\/\/([^/]+\.)?cloudinary\.com\//.test(imagePath);
+
+export { cloudinary };
+export const isCloudinaryConfigured = cloudinaryConfigured;
 
 export const getCloudinaryPublicId = (imageUrl) => {
   if (!imageUrl || typeof imageUrl !== 'string') return null;

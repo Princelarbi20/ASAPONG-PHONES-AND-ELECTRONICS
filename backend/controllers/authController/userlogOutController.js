@@ -1,27 +1,20 @@
-export const userLogoutController = async (req, res) => {
+import { Register } from '../../modules/userRegister.js';
+import { ShopRequest } from '../../modules/shopRequestSchema.js';
+import { clearAuthCookies } from '../../utils/authCookies.js';
+
+export const userLogoutController = async (req, res, next) => {
     try {
-        // Options must match the domain, path, and security flags used when creating the cookies
-        const cookieOptions = {
-            httpOnly: true,
-            secure: false, // Set to true if you are running in production with HTTPS
-            sameSite: 'lax',
-            path: '/'
-        };
+        const accountModel = req.user?.accountType === 'DEALER' ? ShopRequest : Register;
+        if (req.user?.id) {
+            await accountModel.updateOne({ _id: req.user.id }, { $inc: { tokenVersion: 1 } });
+        }
 
-        //  Clear the authentication cookies by forcing immediate expiration
-        res.cookie('token', '', { ...cookieOptions, maxAge: 0 });
-        res.cookie('refreshToken', '', { ...cookieOptions, maxAge: 0 });
-
+        clearAuthCookies(res);
         return res.status(200).json({
             success: true,
-            message: "Logged out successfully. Authentication cookies cleared."
+            message: 'Logged out successfully. Authentication cookies cleared.',
         });
-
     } catch (error) {
-        console.error("Logout Controller Error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error occurred during logout."
-        });
+        return next(error);
     }
 };

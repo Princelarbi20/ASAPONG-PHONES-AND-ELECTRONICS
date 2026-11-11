@@ -16,6 +16,7 @@ export const suspendUserController = async (req,res,next) => {
     }
 
     user.isSuspended = true;
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
 
     await user.save();
 

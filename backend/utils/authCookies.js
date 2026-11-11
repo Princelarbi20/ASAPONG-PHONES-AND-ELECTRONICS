@@ -1,24 +1,14 @@
-const parseExpiryToMs = (value) => {
-    if (!value) return 15 * 60 * 1000;
-
-    const match = value.match(/^(\d+)([smhd])$/i);
-    if (!match) return 15 * 60 * 1000;
+export const parseExpiryToMs = (value) => {
+    const match = typeof value === 'string' && value.match(/^([1-9]\d*)([smhd])$/i);
+    if (!match) throw new Error('Token expiry must use a positive duration such as 15m, 12h, or 7d.');
 
     const amount = Number(match[1]);
     const unit = match[2].toLowerCase();
 
-    switch (unit) {
-        case 's':
-            return amount * 1000;
-        case 'm':
-            return amount * 60 * 1000;
-        case 'h':
-            return amount * 60 * 60 * 1000;
-        case 'd':
-            return amount * 24 * 60 * 60 * 1000;
-        default:
-            return 15 * 60 * 1000;
-    }
+    const multipliers = { s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000 };
+    const milliseconds = amount * multipliers[unit];
+    if (!Number.isSafeInteger(milliseconds)) throw new Error('Token expiry is outside the supported range.');
+    return milliseconds;
 };
 
 const cookieOptions = (maxAge) => ({
@@ -35,6 +25,12 @@ export const setAuthCookies = (res, accessToken, refreshToken) => {
 };
 
 export const clearAuthCookies = (res) => {
-    res.clearCookie('accessToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', path: '/' });
-    res.clearCookie('refreshToken', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', path: '/' });
+    const options = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        path: '/',
+    };
+    res.clearCookie('accessToken', options);
+    res.clearCookie('refreshToken', options);
 };

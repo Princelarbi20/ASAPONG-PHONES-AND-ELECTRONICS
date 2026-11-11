@@ -1,16 +1,25 @@
 import { open, unlink } from 'node:fs/promises';
 import { v2 as cloudinary } from 'cloudinary';
 import { hasImageSignature, hasPdfSignature } from '../utils/fileSignatures.js';
+import { cleanupPartialUploads } from '../utils/uploadCleanup.js';
 
-const removeFiles = async (files) => Promise.all(
-  files.map((file) => unlink(file.path).catch(() => undefined))
-);
+const removeFiles = async (files, req) => {
+  if (req) {
+    await cleanupPartialUploads(req).catch(() => undefined);
+    return;
+  }
+  await cleanupUploadedFiles(files);
+};
 
 export const cleanupUploadedFiles = async (files = []) => Promise.all(files.map(async (file) => {
   if (/^https?:\/\//i.test(file?.path || '') && file?.filename) {
     await new Promise((resolve) => {
       try {
-        cloudinary.uploader.destroy(file.filename, { invalidate: true }, () => resolve());
+        cloudinary.uploader.destroy(file.filename, {
+          resource_type: file.resource_type || 'image',
+          type: file.delivery_type || 'upload',
+          invalidate: true,
+        }, () => resolve());
       } catch {
         resolve();
       }
@@ -49,7 +58,7 @@ const validate = (type) => async (req, res, next) => {
       await handle.close();
       const isValid = type === 'image' ? hasImageSignature(header) : hasPdfSignature(header);
       if (!isValid) {
-        await removeFiles(files);
+        await removeFiles(files, req);
         const error = new Error(`Invalid ${type} file content.`);
         error.statusCode = 400;
         return next(error);
@@ -57,7 +66,7 @@ const validate = (type) => async (req, res, next) => {
     }
     return next();
   } catch (error) {
-    await removeFiles(files);
+    await removeFiles(files, req);
     return next(error);
   }
 };

@@ -1,5 +1,7 @@
 import { ShopRequest } from "../../modules/shopRequestSchema.js";
 import { Product } from "../../modules/productSchema.js";
+import { commitUploadedFiles } from "../../utils/uploadCleanup.js";
+import { getCloudinaryUploadMeta } from "../../utils/cloudinaryHelpers.js";
 export const addProductDealerController = async (req, res, next) => {
   try {
     const { name, description, price, category, stock, brand, rating } = req.body;
@@ -31,6 +33,7 @@ export const addProductDealerController = async (req, res, next) => {
     }
 
     const images = req.files?.map((file) => file.path) || [];
+    const imagePublicIds = req.files?.map((file) => getCloudinaryUploadMeta(file)?.public_id).filter(Boolean) || [];
 
     const existingProduct = await Product.findOne({ name });
     if (existingProduct) {
@@ -50,10 +53,12 @@ export const addProductDealerController = async (req, res, next) => {
       brand,
       rating: Number(rating) || 1,
       images,
+      imagePublicIds,
       shop: userShop.shopName, 
       status: "PENDING" 
     });
 
+    commitUploadedFiles(req);
     return res.status(201).json({
       success: true,
       message: "Product submitted successfully. Awaiting admin approval.",

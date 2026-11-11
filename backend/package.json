@@ -5,7 +5,8 @@
   "main": "nodemon app.js",
   "scripts": {
     "start": "node app.js",
-  "dev": "nodemon app.js"
+    "dev": "nodemon app.js",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
@@ -22,7 +23,7 @@
     "express-rate-limit": "^8.5.2",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.7.1",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.5.0",
     "nodemailer": "^10.5.0",
     "resend": "^6.18.1"
   },

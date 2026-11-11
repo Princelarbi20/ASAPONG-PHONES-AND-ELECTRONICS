@@ -53,6 +53,11 @@ const userRegisterSchema = new mongoose.Schema({
         type: Date,
         default: null,
     },
+    tokenVersion: {
+        type: Number,
+        default: 0,
+        min: 0,
+    },
     otp: {
         type: String,
         select: false // Recommended: Hide hashed OTP from default queries for security

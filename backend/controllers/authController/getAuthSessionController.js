@@ -12,7 +12,7 @@ export const getAuthSessionController = async (req, res, next) => {
     if (customer) {
       return res.status(200).json({
         success: true,
-        accountType: customer.role,
+        accountType: "USER",
         user: {
           id: customer._id,
           userName: customer.userName,

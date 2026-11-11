@@ -91,7 +91,7 @@ export const initializePaymentController = async (req, res) => {
       });
     }
 
-    const frontendUrl = (process.env.CLIENT_URL || process.env.FRONTEND_ORIGIN || "http://localhost:5173")
+    const frontendUrl = (process.env.CLIENT_URL || process.env.FRONTEND_ORIGIN)
       .trim()
       .replace(/\/+$/, "");
 

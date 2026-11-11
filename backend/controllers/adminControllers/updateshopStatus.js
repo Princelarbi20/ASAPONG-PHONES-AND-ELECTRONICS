@@ -23,7 +23,10 @@ export const updateshopStatus = async (req, res) => {
         }
 
         // 4. Update the status and save it to the database
-        findShop.status = status || "updatedStatus"; // Pass the new status from req.body
+        if (findShop.status !== status) {
+            findShop.status = status;
+            findShop.tokenVersion = (findShop.tokenVersion || 0) + 1;
+        }
         await findShop.save();
 
         // 5. Return success after a successful database update

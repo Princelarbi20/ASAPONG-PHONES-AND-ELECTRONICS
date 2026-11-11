@@ -2,9 +2,8 @@ import React from 'react';
 import { LogOut } from 'lucide-react';
 import { useDispatch } from 'react-redux';
 import axiosInstance from '../../lib/axios';
-import { authAction } from '../../redux/store'; // Verified path configuration matches your system imports
-
-const FRONTEND_ORIGIN = import.meta.env.VITE_FRONTEND_ORIGIN || 'http://localhost:5173';
+import toast from 'react-hot-toast';
+import { authAction } from '../../redux/store';
 
 export const SignOut = () => {
   const dispatch = useDispatch();
@@ -12,13 +11,11 @@ export const SignOut = () => {
   const handleLogout = async () => {
     try {
       await axiosInstance.post('/user-log-out');
-    } catch {
-      // Clear local UI state even if the server session has already expired.
-    } finally {
       dispatch(authAction.logout());
+      window.location.assign(window.location.origin);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not sign out. Please try again.');
     }
-
-    window.location.href = `${FRONTEND_ORIGIN}/`;
   };
 
   return (

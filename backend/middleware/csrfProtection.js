@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { isTrustedOrigin } from '../config/trustedOrigins.js';
 
 const cookieOptions = {
   httpOnly: false,
@@ -22,6 +23,10 @@ export const issueCsrfToken = (req, res) => {
 
 export const csrfProtection = (req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const origin = req.get('Origin');
+  if (origin && !isTrustedOrigin(origin)) {
+    return res.status(403).json({ success: false, message: 'Request origin is not allowed.' });
+  }
   if (safeEqual(req.get('X-CSRF-Token'), req.cookies?.csrfToken)) return next();
   return res.status(403).json({ success: false, message: 'Invalid or missing CSRF token.' });
 };

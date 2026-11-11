@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../../lib/axios';
 import toast from 'react-hot-toast';
 import { withCsrf } from '../../lib/csrf';
+import { useDispatch } from 'react-redux';
+import { authAction } from '../../redux/store';
 
 
 const ResetPassword = () => {
@@ -12,6 +14,7 @@ const ResetPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   // Regex matching backend validation requirements
   const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/;
@@ -37,6 +40,7 @@ const ResetPassword = () => {
       const response = await axiosInstance.put('/reset-password', { currentPassword, newPassword }, config);
 
       if (response.data.success) {
+        dispatch(authAction.logout());
         toast.success(response.data.message || 'Password reset successfully!');
         setTimeout(() => {
           navigate('/auth/login');

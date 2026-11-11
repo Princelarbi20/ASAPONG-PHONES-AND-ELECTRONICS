@@ -209,13 +209,15 @@ export const sendOrderConfirmationEmail = async (orderId) => {
 // ---------------------------------------------------------------------------
 // Payment failed / reversed
 // ---------------------------------------------------------------------------
+export const getPaymentFailureRetryUrl = () => `${process.env.CLIENT_URL || process.env.FRONTEND_ORIGIN}/my-orders`;
+
 export const sendPaymentFailedEmail = async (orderId, { reason, reversed = false } = {}) => {
   console.log(`[email] Preparing payment-failed email for order ${orderId}`);
 
   const { order, recipientEmail } = await loadOrderForEmail(orderId);
   const customerName = esc(order.user?.userName || 'Valued Customer');
   const logo = process.env.CLOUDINARY_LOG || '';
-  const retryUrl = `${process.env.CLIENT_URL}/my-orders`;
+  const retryUrl = getPaymentFailureRetryUrl();
 
   const headline = reversed ? 'Your payment was reversed' : 'Your payment was not successful';
   const intro = reversed

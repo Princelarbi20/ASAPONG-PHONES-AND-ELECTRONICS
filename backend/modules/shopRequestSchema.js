@@ -81,6 +81,20 @@ export const shopRequestSchema = new mongoose.Schema({
     enum: ['ADMIN', 'USER', 'DEALER', 'DELLAER'], 
     default: 'DEALER'
   },
+  tokenVersion: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  failedLoginAttempts: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  lockUntil: {
+    type: Date,
+    default: null
+  },
   status: {
     type: String,
     enum: ['PENDING', 'APPROVED', 'REJECTED'],

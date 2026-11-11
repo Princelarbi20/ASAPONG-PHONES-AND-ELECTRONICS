@@ -1,4 +1,4 @@
-import { cleanupUploadedFiles } from './validateUploadedFiles.js';
+import { cleanupPartialUploads } from '../utils/uploadCleanup.js';
 
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value) && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
@@ -91,7 +91,7 @@ export const validateRequest = (shape, { allowUnknown = false } = {}) => async (
     }
   }
   if (errors.length) {
-    await cleanupUploadedFiles(req.files);
+    await cleanupPartialUploads(req);
     return res.status(422).json({ success: false, message: 'Validation failed', errors });
   }
   return next();

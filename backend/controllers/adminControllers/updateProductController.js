@@ -2,6 +2,8 @@
 import { Product } from "../../modules/productSchema.js";
 import { normalizeUploadedImagePaths } from "../../utils/normalizeImagePaths.js";
 import { getCloudinaryUploadMeta } from "../../utils/cloudinaryHelpers.js";
+import { destroyCloudinaryAssetByPublicId, getCloudinaryPublicId } from "../../utils/cloudinaryHelpers.js";
+import { commitUploadedFiles } from "../../utils/uploadCleanup.js";
 
 export const updateProductController = async (req, res, next) => {
   try {
@@ -50,6 +52,16 @@ export const updateProductController = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Product not found." });
     }
 
+    const retainedPublicIds = (existingProduct.images || [])
+      .filter((image) => finalImages.includes(image))
+      .map((image) => getCloudinaryPublicId(image))
+      .filter(Boolean);
+    const oldPublicIds = Array.isArray(existingProduct.imagePublicIds) && existingProduct.imagePublicIds.length
+      ? existingProduct.imagePublicIds
+      : (existingProduct.images || []).map(getCloudinaryPublicId).filter(Boolean);
+    const nextPublicIds = [...new Set([...retainedPublicIds, ...finalImagePublicIds])];
+    const removedPublicIds = oldPublicIds.filter((publicId) => !nextPublicIds.includes(publicId));
+
     const updateData = {
       name,
       brand,
@@ -59,18 +71,12 @@ export const updateProductController = async (req, res, next) => {
       stock: parseInt(stock, 10),
       rating: parseInt(rating, 10) || 1,
       images: finalImages,
+      imagePublicIds: nextPublicIds,
       newArrival: newArrival === 'true',
       specifications: specs,
     };
 
-    const updateQuery = { $set: updateData };
-    if (finalImagePublicIds.length > 0) {
-      updateQuery.$push = {
-        imagePublicIds: { $each: finalImagePublicIds }
-      };
-    }
-
-    const updatedProduct = await Product.findByIdAndUpdate(id, updateQuery, {
+    const updatedProduct = await Product.findByIdAndUpdate(id, { $set: updateData }, {
       new: true,
       runValidators: true,
     });
@@ -79,6 +85,10 @@ export const updateProductController = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Product not found." });
     }
 
+    commitUploadedFiles(req);
+    await Promise.all(removedPublicIds.map((publicId) => destroyCloudinaryAssetByPublicId(publicId).catch((error) => {
+      console.error('Failed to remove replaced Cloudinary product image:', error);
+    })));
     res.status(200).json({ success: true, product: updatedProduct });
   } catch (error) {
     next(error);

@@ -15,6 +15,28 @@ const verifyPassword = async (password, passwordHash) => {
     }
 };
 
+const isTemporarilyLocked = (account) =>
+    (account.failedLoginAttempts || 0) >= 3 && account.lockUntil && account.lockUntil > Date.now();
+
+const recordFailedLogin = async (model, accountId) => {
+    const now = new Date();
+    const result = await model.updateOne(
+        {
+            _id: accountId,
+            $or: [
+                { failedLoginAttempts: { $lt: 3 } },
+                { lockUntil: { $lte: now } },
+                { lockUntil: null },
+            ],
+        },
+        {
+            $inc: { failedLoginAttempts: 1 },
+            $set: { lockUntil: new Date(now.getTime() + 50 * 60 * 1000) },
+        }
+    );
+    return result.modifiedCount === 1;
+};
+
 export const userLoginController = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -36,7 +58,7 @@ export const userLoginController = async (req, res) => {
 
         if (regularUser) {
             // Check Lockout Status FIRST (Saves CPU time)
-            if (regularUser.lockUntil && regularUser.lockUntil > Date.now()) {
+            if (isTemporarilyLocked(regularUser)) {
                 return res.status(403).json({
                     success: false,
                     message: "Account is temporarily locked. Try again later."
@@ -55,18 +77,18 @@ export const userLoginController = async (req, res) => {
             const isMatch = await verifyPassword(password, regularUser.password);
 
             if (!isMatch) {
-                const failedLoginAttempts = (regularUser.failedLoginAttempts || 0) + 1;
-                const loginTracking = { failedLoginAttempts };
+                const updatedUser = await recordFailedLogin(Register, regularUser._id);
 
-                if (failedLoginAttempts >= 3) {
-                    loginTracking.lockUntil = new Date(Date.now() + 50 * 60 * 1000); // 50 minutes
+                if (!updatedUser) {
+                    return res.status(403).json({
+                        success: false,
+                        message: "Account is temporarily locked. Try again later."
+                    });
                 }
-
-                await Register.updateOne({ _id: regularUser._id }, { $set: loginTracking });
 
                 return res.status(401).json({
                     success: false,
-                    message: "Invalid email or  password" // Generic to prevent account enumeration
+                    message: "Invalid email or password."
                 });
             }
 
@@ -90,13 +112,25 @@ export const userLoginController = async (req, res) => {
 
             // Generate Tokens
             const token = jwt.sign(
-                { id: regularUser._id, role: regularUser.role },
+                {
+                    id: String(regularUser._id),
+                    email: regularUser.email,
+                    role: regularUser.role,
+                    accountType: "USER",
+                    ver: regularUser.tokenVersion || 0,
+                },
                 process.env.ACCESS_TOKEN_SECRET,
                 { expiresIn: process.env.ACCESS_TOKEN_EXPIRE }
             );
 
             const refreshToken = jwt.sign(
-                { id: regularUser._id, role: regularUser.role },
+                {
+                    id: String(regularUser._id),
+                    email: regularUser.email,
+                    role: regularUser.role,
+                    accountType: "USER",
+                    ver: regularUser.tokenVersion || 0,
+                },
                 process.env.REFRESH_TOKEN_SECRET,
                 { expiresIn: process.env.REFRESH_TOKEN_EXPIRE }
             );
@@ -126,13 +160,34 @@ export const userLoginController = async (req, res) => {
         const shopUser = await ShopRequest.findOne({ email: searchEmail }).select('+password');
 
         if (shopUser) {
+            if (isTemporarilyLocked(shopUser)) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Account is temporarily locked. Try again later."
+                });
+            }
+
             const isMatch = await verifyPassword(password, shopUser.password);
 
             if (!isMatch) {
+                const updatedShop = await recordFailedLogin(ShopRequest, shopUser._id);
+                if (!updatedShop) {
+                    return res.status(403).json({
+                        success: false,
+                        message: "Account is temporarily locked. Try again later."
+                    });
+                }
                 return res.status(401).json({
                     success: false,
                     message: "Invalid email or password."
                 });
+            }
+
+            if (shopUser.failedLoginAttempts > 0 || shopUser.lockUntil) {
+                await ShopRequest.updateOne(
+                    { _id: shopUser._id },
+                    { $set: { failedLoginAttempts: 0, lockUntil: null } }
+                );
             }
 
             if (shopUser.status === "PENDING") {
@@ -150,13 +205,25 @@ export const userLoginController = async (req, res) => {
             }
 
             const token = jwt.sign(
-                { id: shopUser._id, role: shopUser.role },
+                {
+                    id: String(shopUser._id),
+                    email: shopUser.email,
+                    role: shopUser.role,
+                    accountType: "DEALER",
+                    ver: shopUser.tokenVersion || 0,
+                },
                 process.env.ACCESS_TOKEN_SECRET,
                 { expiresIn: process.env.ACCESS_TOKEN_EXPIRE }
             );
 
             const refreshToken = jwt.sign(
-                { id: shopUser._id, role: shopUser.role },
+                {
+                    id: String(shopUser._id),
+                    email: shopUser.email,
+                    role: shopUser.role,
+                    accountType: "DEALER",
+                    ver: shopUser.tokenVersion || 0,
+                },
                 process.env.REFRESH_TOKEN_SECRET,
                 { expiresIn: process.env.REFRESH_TOKEN_EXPIRE }
             );
@@ -186,7 +253,7 @@ export const userLoginController = async (req, res) => {
         // ==========================================
         return res.status(401).json({
             success: false,
-            message: "This email is not registered."
+            message: "Invalid email or password."
         });
 
     } catch (error) {
