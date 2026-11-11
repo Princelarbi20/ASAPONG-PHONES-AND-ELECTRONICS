@@ -4,6 +4,17 @@ import { Register } from "../../modules/userRegister.js";
 import { ShopRequest } from "../../modules/shopRequestSchema.js";
 import { setAuthCookies } from "../../utils/authCookies.js";
 
+const verifyPassword = async (password, passwordHash) => {
+    if (typeof passwordHash !== "string" || !passwordHash.startsWith("$2")) return false;
+
+    try {
+        return await bcrypt.compare(password, passwordHash);
+    } catch {
+        // A malformed or legacy hash should be treated as a failed login, not a server error.
+        return false;
+    }
+};
+
 export const userLoginController = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -41,16 +52,17 @@ export const userLoginController = async (req, res) => {
             }
 
             // Verify Password
-            const isMatch = await bcrypt.compare(password, regularUser.password);
+            const isMatch = await verifyPassword(password, regularUser.password);
 
             if (!isMatch) {
-                regularUser.failedLoginAttempts = (regularUser.failedLoginAttempts || 0) + 1;
+                const failedLoginAttempts = (regularUser.failedLoginAttempts || 0) + 1;
+                const loginTracking = { failedLoginAttempts };
 
-                if (regularUser.failedLoginAttempts >= 3) {
-                    regularUser.lockUntil = new Date(Date.now() + 50 * 60 * 1000); // 50 minutes
+                if (failedLoginAttempts >= 3) {
+                    loginTracking.lockUntil = new Date(Date.now() + 50 * 60 * 1000); // 50 minutes
                 }
 
-                await regularUser.save();
+                await Register.updateOne({ _id: regularUser._id }, { $set: loginTracking });
 
                 return res.status(401).json({
                     success: false,
@@ -70,9 +82,10 @@ export const userLoginController = async (req, res) => {
 
             // Reset failed login tracking on successful login
             if (regularUser.failedLoginAttempts > 0 || regularUser.lockUntil) {
-                regularUser.failedLoginAttempts = 0;
-                regularUser.lockUntil = null;
-                await regularUser.save();
+                await Register.updateOne(
+                    { _id: regularUser._id },
+                    { $set: { failedLoginAttempts: 0, lockUntil: null } }
+                );
             }
 
             // Generate Tokens
@@ -113,7 +126,7 @@ export const userLoginController = async (req, res) => {
         const shopUser = await ShopRequest.findOne({ email: searchEmail }).select('+password');
 
         if (shopUser) {
-            const isMatch = await bcrypt.compare(password, shopUser.password);
+            const isMatch = await verifyPassword(password, shopUser.password);
 
             if (!isMatch) {
                 return res.status(401).json({

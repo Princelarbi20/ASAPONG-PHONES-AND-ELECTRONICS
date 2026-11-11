@@ -50,17 +50,17 @@ export const Footer = () => {
   ];
 
   return (
-    <footer className="px-4 sm:flex sm:px-6 md:px-8 bg-slate-50 border-t border-slate-200 md:justify-center md:text-center md:items-center">
-      <div className="max-w-7xl mx-auto flex sm:justify-center sm:text-center sm">
+    <footer className="bg-red-300 border-t border-red-400/60 px-4 sm:px-6 md:px-8">
+      <div className="max-w-7xl mx-auto">
         
         {/* MAIN LAYOUT CONTAINER */}
-        <div className="flex flex-co2 lg:flex-row justify-between gap-10 py-12 border-b border-slate-200 text-slate-700 ">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-10 py-10 sm:py-12 border-b border-red-400/50 text-slate-700">
 
           {/* LEFT SECTION (Brand & Description) */}
           <div className="flex flex-col items-center text-center lg:items-start lg:text-left space-y-5 lg:max-w-sm">
             
             {/* FIXED: Swapped out the outer <Link to="/"> for a clean structural block wrapper to prevent duplicate <a> compilation */}
-            <div className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-700">
+            <div className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-800">
                <Logo />
             </div>
 
@@ -92,7 +92,7 @@ export const Footer = () => {
           </div>
 
           {/* RIGHT SECTION (Navigation Grid) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-6 w-full lg:max-w-3xl pt-4 lg:pt-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 sm:gap-10 w-full lg:max-w-xl pt-2 lg:pt-0">
             {linkSections.map((section, index) => (
               <div key={index} className="flex flex-col items-center text-center sm:items-start sm:text-left">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-red-700 mb-4">
