@@ -8,6 +8,6 @@ export function formatPrice(price) {
         Fragment,
         null,
         createElement('span', { className: 'text-red-600' }, 'GH₵ '),
-        createElement('span', { className: 'text-black' }, formatted)
+        createElement('span', { className: 'text-black admin-price-value' }, formatted)
     );
 }

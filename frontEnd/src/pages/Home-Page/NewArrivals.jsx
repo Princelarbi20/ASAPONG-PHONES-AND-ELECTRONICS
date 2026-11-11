@@ -1,18 +1,15 @@
 import React, { useEffect, useState } from 'react'
 import Title from '@/component/Title'
-import axios from 'axios'
+import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios'
 import { useNavigate } from 'react-router-dom'
 import { formatPrice } from '@/lib/utils'
 
 const SLIDE_INTERVAL_MS = 3000
 const SLIDE_DURATION_MS = 700 // keep in sync with duration-700 below
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ""
-
 const getSingleImageUrl = (imgStr) => {
   if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
-  if (imgStr.startsWith('http')) return imgStr;
-  return `${API_BASE}/${imgStr.replace(/\\/g, '/')}`;
+  return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
 };
 
 // Card image area. With more than one image it slides to the next one every few seconds.
@@ -127,9 +124,7 @@ const NewArrivals = () => {
   const fetchProduct = async () => {
     try {
       setLoading(true)
-      const response = await axios.get(
-        `${API_BASE}/api/v1/get-All-product`
-      );
+      const response = await axiosInstance.get('/get-All-product');
 
       let allProduct = [];
       if (response.data && Array.isArray(response.data.products)) {
@@ -156,15 +151,15 @@ const NewArrivals = () => {
     <div className="w-full bg-slate-50  md:px-8  space-y-8 font-sans">
 
       {/* Premium Typography Heading Block with Infinite Smooth Scale Loop */}
-      <div className="flex flex-col items-start justify-center w-full border-b border-slate-200 pb-4 animate-[pulse_3s_ease-in-out_infinite]">
+      <div className="flex flex-col items-start justify-center w-full border-b border-slate-200 pb-4">
         <Title
           text1="NEW"
           text2="ARRIVALS"
           className="justify-start text-left gap-2 tracking-tight text-2xl md:text-3xl"
           text1className="text-slate-900 font-extrabold"
-          text2className="font-light text-rose-600 uppercase tracking-widest"
+          text2className="font-light text-[#881337] uppercase tracking-widest"
         />
-        <p className="text-xs text-slate-500 mt-1 font-medium tracking-wide">
+        <p className="text-xs text-slate-900 mt-1 font-medium tracking-wide">
           Explore our latest curated additions
         </p>
       </div>
@@ -201,7 +196,7 @@ const NewArrivals = () => {
                 {/* Info & Text Parameters */}
                 <div className="space-y-2 flex-1 flex flex-col justify-between">
                   <div>
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-0.5">
+                    <span className="text-[10px] font-semibold text-slate-700 uppercase tracking-wider block mb-0.5">
                       {item.brand || "Brand"}
                     </span>
                     <h3 className="text-xs md:text-sm font-semibold text-slate-800 line-clamp-2 group-hover:text-rose-600 transition-colors duration-200 leading-snug">
@@ -224,7 +219,7 @@ const NewArrivals = () => {
           })}
         </div>
       ) : (
-        <div className="text-center py-16 text-sm text-slate-400 font-medium italic">
+        <div className="text-center py-16 text-sm text-slate-600 font-medium italic">
           No items are currently tagged as new arrivals.
         </div>
       )}

@@ -2,13 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CreditCard, MapPin, Loader2, ShoppingBag, CheckCircle2 } from 'lucide-react';
-import axios from 'axios';
+import axiosInstance, { resolveApiAssetUrl } from '../../lib/axios';
 import { toast } from 'react-hot-toast';
 import { formatPrice } from '@/lib/utils';
 import { authAction } from '../../redux/store';
-
-// Get backend base URL from Vite environment variables with a fallback
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export const Checkout = () => {
   const navigate = useNavigate();
@@ -16,7 +13,6 @@ export const Checkout = () => {
 
   // Read login state and user details from Redux
   const isAuthenticated = useSelector((state) => state.auth.isLogin);
-  const user = useSelector((state) => state.auth.user); // Assumes user info (including email) is stored here
 
   // Core component states
   const [cartItems, setCartItems] = useState([]);
@@ -34,16 +30,12 @@ export const Checkout = () => {
     country: 'Ghana',
     postalCode: ''
   });
+  const [addressErrors, setAddressErrors] = useState({});
 
   // URL parsing helper
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/150?text=No+Image';
-    if (imgStr.startsWith('http')) return imgStr;
-    const normalizedPath = imgStr.replace(/\\/g, '/');
-    if (normalizedPath.startsWith('/uploads/')) {
-      return `${API_BASE_URL}${normalizedPath}`;
-    }
-    return `${API_BASE_URL}/${normalizedPath.replace(/^\//, '')}`;
+    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
   };
 
   // FETCH ACTIVE USER CART SNAPSHOT
@@ -51,9 +43,7 @@ export const Checkout = () => {
     if (!isAuthenticated) return;
     try {
       setLoadingCart(true);
-      const response = await axios.get(`${API_BASE_URL}/api/v1/cart`, {
-        withCredentials: true
-      });
+      const response = await axiosInstance.get('/cart');
 
       if (response.data && Array.isArray(response.data.cart)) {
         setCartItems(response.data.cart);
@@ -89,11 +79,20 @@ export const Checkout = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setAddressData(prev => ({ ...prev, [name]: value }));
+    setAddressErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
   // HANDLER: PLACE THE FINAL ORDER OR INITIALIZE PAYMENT
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
+
+    const nextErrors = Object.fromEntries(Object.entries(addressData).map(([field, value]) => [field, value.trim() ? '' : 'This field is required.']));
+    for (const [field, value] of Object.entries(addressData)) {
+      const maxLength = field === 'address' ? 200 : field === 'postalCode' ? 30 : 100;
+      if (value.trim().length > maxLength) nextErrors[field] = `Use ${maxLength} characters or fewer.`;
+    }
+    setAddressErrors(nextErrors);
+    if (Object.values(nextErrors).some(Boolean)) return;
 
     if (cartItems.length === 0) {
       toast.error("Your shopping cart is empty!");
@@ -105,8 +104,8 @@ export const Checkout = () => {
       setSubmittingOrder(true);
 
       // 1. Create the pending order first in backend
-      const orderResponse = await axios.post(
-        `${API_BASE_URL}/api/v1/create-order`,
+      const orderResponse = await axiosInstance.post(
+        '/create-order',
         { 
           shippingAddress: addressData,
           paymentMethod 
@@ -125,20 +124,10 @@ export const Checkout = () => {
       if (paymentMethod === 'ONLINE') {
         toast.loading("Redirecting to payment gateway...", { id: orderToastId });
 
-        const userEmail = user?.email || createdOrder?.user?.email;
-
-        if (!userEmail) {
-          toast.error("User email missing. Please try again.", { id: orderToastId });
-          setSubmittingOrder(false);
-          return;
-        }
-
         // Initialize Paystack Payment
-        const paymentResponse = await axios.post(
-          `${API_BASE_URL}/api/v1/payment/initialize`,
+        const paymentResponse = await axiosInstance.post(
+          '/payment/initialize',
           {
-            email: userEmail,
-            amount: total,
             orderId: orderId
           },
           { withCredentials: true }
@@ -224,11 +213,14 @@ export const Checkout = () => {
                 type="text"
                 name="address"
                 required
+                maxLength={200}
+                aria-invalid={Boolean(addressErrors.address)}
                 value={addressData.address}
                 onChange={handleInputChange}
                 placeholder="House number, apartment suite, street line details..."
                 className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:outline-none focus:ring-green-300 bg-gray-50/30 text-gray-800 font-medium"
               />
+              {addressErrors.address && <p className="mt-1 text-xs text-red-600">{addressErrors.address}</p>}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -238,11 +230,14 @@ export const Checkout = () => {
                   type="text"
                   name="city"
                   required
+                  maxLength={100}
+                  aria-invalid={Boolean(addressErrors.city)}
                   value={addressData.city}
                   onChange={handleInputChange}
                   placeholder="Accra, Kumasi, etc."
                   className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:outline-none focus:ring-green-300 bg-gray-50/30 text-gray-800 font-medium"
                 />
+                {addressErrors.city && <p className="mt-1 text-xs text-red-600">{addressErrors.city}</p>}
               </div>
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">State / Region</label>
@@ -250,11 +245,14 @@ export const Checkout = () => {
                   type="text"
                   name="state"
                   required
+                  maxLength={100}
+                  aria-invalid={Boolean(addressErrors.state)}
                   value={addressData.state}
                   onChange={handleInputChange}
                   placeholder="Greater Accra, Ashanti..."
                   className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:outline-none focus:ring-green-300 bg-gray-50/30 text-gray-800 font-medium"
                 />
+                {addressErrors.state && <p className="mt-1 text-xs text-red-600">{addressErrors.state}</p>}
               </div>
             </div>
 
@@ -265,6 +263,7 @@ export const Checkout = () => {
                   type="text"
                   name="country"
                   required
+                  maxLength={100}
                   value={addressData.country}
                   onChange={handleInputChange}
                   className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 bg-gray-200 text-gray-500 font-bold cursor-not-allowed"
@@ -277,11 +276,14 @@ export const Checkout = () => {
                   type="text"
                   name="postalCode"
                   required
+                  maxLength={30}
+                  aria-invalid={Boolean(addressErrors.postalCode)}
                   value={addressData.postalCode}
                   onChange={handleInputChange}
                   placeholder="00233 or Digital Address"
                   className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 focus:ring-2 focus:outline-none focus:ring-green-300 bg-gray-50/30 text-gray-800 font-medium"
                 />
+                {addressErrors.postalCode && <p className="mt-1 text-xs text-red-600">{addressErrors.postalCode}</p>}
               </div>
             </div>
           </div>

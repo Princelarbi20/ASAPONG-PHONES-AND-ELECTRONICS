@@ -4,7 +4,10 @@ import bcrypt from 'bcrypt';
 
 export const createShopRequest = async (req, res, next) => {
   try {
-    const { shopName, description, category, email, number, password } = req.body;
+    const { description, category, password } = req.body;
+    const shopName = req.body.shopName.trim();
+    const email = req.body.email.trim().toLowerCase();
+    const number = req.body.number.replace(/[\s()-]/g, '');
 
     if (!shopName || !description || !category || !email || !number || !password) {
       return res.status(400).json({
@@ -37,7 +40,7 @@ export const createShopRequest = async (req, res, next) => {
     });
 
     if (existingRequest) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
         message: 'There is already an active or pending shop application tied to this business email.'
       });
@@ -46,7 +49,7 @@ export const createShopRequest = async (req, res, next) => {
     // 4. Check if the shop name is unique
     const nameExists = await ShopRequest.findOne({ shopName });
     if (nameExists) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
         message: 'This shop name is already taken or under review.'
       });
@@ -86,6 +89,6 @@ export const createShopRequest = async (req, res, next) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return next(error);
   }
 };

@@ -2,13 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, Trash2, Plus, Minus, ArrowLeft, Loader2 } from 'lucide-react';
-import axios from 'axios';
+import axiosInstance, { resolveApiAssetUrl } from '../../lib/axios';
 import { toast } from 'react-hot-toast';
 import { formatPrice } from '../../lib/utils';
 import { authAction } from '../../redux/store';
-
-// Get backend base URL from Vite environment variables with a fallback
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export const Cart = () => {
   const dispatch = useDispatch();
@@ -22,12 +19,7 @@ export const Cart = () => {
 
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/150?text=No+Image';
-    if (imgStr.startsWith('http')) return imgStr;
-    const normalizedPath = imgStr.replace(/\\/g, '/');
-    if (normalizedPath.startsWith('/uploads/')) {
-      return `${API_BASE_URL}${normalizedPath}`;
-    }
-    return `${API_BASE_URL}/${normalizedPath.replace(/^\//, '')}`;
+    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
   };
 
   const fetchCart = useCallback(async () => {
@@ -36,9 +28,7 @@ export const Cart = () => {
       setLoading(true);
       setErrorMsg('');
 
-      const response = await axios.get(`${API_BASE_URL}/api/v1/cart`, {
-        withCredentials: true
-      });
+      const response = await axiosInstance.get('/cart');
 
       if (response.data && Array.isArray(response.data.cart)) {
         setCartItems(response.data.cart);
@@ -75,7 +65,7 @@ export const Cart = () => {
 
     const updateToastId = toast.loading("Updating quantity...");
     try {
-      const response = await axios.put(`${API_BASE_URL}/api/v1/update/${productId}`,
+      const response = await axiosInstance.put(`/update/${productId}`,
         { quantity: newQuantity },
         { withCredentials: true }
       );
@@ -114,7 +104,7 @@ export const Cart = () => {
               toast.dismiss(t.id);
               const deleteToastId = toast.loading("Removing item...");
               try {
-                const response = await axios.delete(`${API_BASE_URL}/api/v1/remove/${productId}`, {
+                const response = await axiosInstance.delete(`/remove/${productId}`, {
                   withCredentials: true
                 });
 

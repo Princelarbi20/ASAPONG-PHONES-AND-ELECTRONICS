@@ -1,6 +1,7 @@
 import { Orders } from "../../modules/orderSchema.js";
 import { buildOrderStatusEmail } from "../../utils/orderStatusEmail.js";
 import sendEmail from "../../utils/nodemailer.js";
+import { canTransitionOrderStatus } from "../../utils/orderStatusTransitions.js";
 
 export const updateOrderStatusController =
   async (req, res, next) => {
@@ -25,6 +26,9 @@ export const updateOrderStatusController =
       }
 
       const previousStatus = order.status;
+      if (!canTransitionOrderStatus(previousStatus, status)) {
+        return res.status(409).json({ success: false, message: `Order cannot move from ${previousStatus} to ${status}.` });
+      }
       order.status = status;
 
       await order.save();

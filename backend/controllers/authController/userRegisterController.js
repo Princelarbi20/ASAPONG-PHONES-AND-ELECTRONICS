@@ -4,6 +4,7 @@ import { randomInt } from "crypto";
 import { Register } from "../../modules/userRegister.js";
 import { setAuthCookies } from "../../utils/authCookies.js";
 import sendEmail from "../../utils/nodemailer.js";
+import { escapeHtml } from "../../utils/escapeHtml.js";
 
 export const userRegisterController = async (req, res) => {
     try {
@@ -18,7 +19,7 @@ export const userRegisterController = async (req, res) => {
         }
 
         // Validate Name
-        const nameRegex = /^[a-zA-Z\s]+$/;
+        const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M} .'-]*$/u;
         if (!nameRegex.test(userName)) {
             return res.status(400).json({
                 success: false,
@@ -37,7 +38,8 @@ export const userRegisterController = async (req, res) => {
         }
 
         // Validate Phone (10 digits)
-        const cleanPhone = phone.replace(/\D/g, "");
+        let cleanPhone = phone.replace(/\D/g, "");
+        if (cleanPhone.startsWith("233") && cleanPhone.length === 12) cleanPhone = `0${cleanPhone.slice(3)}`;
         if (cleanPhone.length !== 10) {
             return res.status(400).json({
                 success: false,
@@ -46,7 +48,7 @@ export const userRegisterController = async (req, res) => {
         }
 
         // Validate Password Strength
-        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/;
         if (!passwordRegex.test(password)) {
             return res.status(400).json({
                 success: false,
@@ -138,7 +140,7 @@ export const userRegisterController = async (req, res) => {
             <tr>
               <td style="padding: 32px 28px; text-align: center;">
                 <h2 style="color: #111827; margin: 0 0 12px 0; font-size: 20px; font-weight: 600;">
-                  Hello, ${newUser.userName}!
+                  Hello, ${escapeHtml(newUser.userName)}!
                 </h2>
                 <p style="color: #4b5563; margin: 0 0 24px 0; font-size: 14px; line-height: 1.5;">
                   Thank you for registering. Use the One-Time Password (OTP) below to complete your account verification:
@@ -195,6 +197,10 @@ export const userRegisterController = async (req, res) => {
         });
 
     } catch (error) {
+        if (error?.code === 11000) {
+            const field = Object.keys(error.keyPattern || {})[0];
+            return res.status(409).json({ success: false, message: field === 'phone' ? 'This phone number is already registered.' : 'This email address is already registered.' });
+        }
         console.error("User Registration Error:", error);
         return res.status(500).json({
             success: false,

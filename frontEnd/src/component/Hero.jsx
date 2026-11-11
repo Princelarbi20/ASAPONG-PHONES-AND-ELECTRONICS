@@ -2,10 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/component/Button'
 import { FaAngleRight, FaAngleLeft } from "react-icons/fa"
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
-
-// Get backend base URL from Vite environment variables with a fallback to http://localhost:5000
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios'
 
 const Hero = () => {
   const navigate = useNavigate()
@@ -54,7 +51,7 @@ const Hero = () => {
       try {
         setLoading(true);
 
-        const response = await axios.get(`${API_BASE_URL}/api/v1/get-All-product`);
+        const response = await axiosInstance.get('/get-All-product');
 
         let rawProductsList = [];
         if (response.data && Array.isArray(response.data.products)) {
@@ -96,12 +93,8 @@ const Hero = () => {
 
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
-    if (imgStr.startsWith('http')) return imgStr;
-    const normalizedPath = imgStr.replace(/\\/g, '/');
-    if (normalizedPath.startsWith('/uploads/')) {
-      return `${API_BASE_URL}${normalizedPath}`;
-    }
-    return `${API_BASE_URL}/${normalizedPath.replace(/^\//, '')}`;
+    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return imgStr;
+    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
   };
 
   const activeDevice = devices[currentIndex];
@@ -149,7 +142,7 @@ const Hero = () => {
           <>
             {/* [LEFT PART] */}
             <div className="flex flex-col justify-center items-start gap-2 md:gap-4 w-full max-w-[35%] shrink-0 z-20">
-              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-red-600 bg-red-50 px-2.5 py-1 rounded-md">
+              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-red-700 bg-red-50 px-2.5 py-1 rounded-md">
                 {activeDevice?.brand || "Premium"}
               </span>
 
@@ -205,11 +198,11 @@ const Hero = () => {
               <div className="hidden lg:flex flex-col items-center bg-slate-50 border border-dashed border-slate-300 p-3 text-center select-none rounded-md w-44">
                 <span className="text-xs font-bold text-slate-500 tracking-wide uppercase">{activeDevice?.brand || "EXCLUSIVE"}</span>
                 <span className="text-sm font-black text-slate-800 leading-none mt-1">EXCLUSIVE STOCK</span>
-                <div className="bg-emerald-500 text-white font-bold text-[10px] px-2 py-0.5 rounded-sm mt-1.5">BEST PRICE</div>
+                <div className="bg-emerald-800 text-white font-bold text-[10px] px-2 py-0.5 rounded-sm mt-1.5">BEST PRICE</div>
               </div>
 
-              <div className="bg-red-600 text-white rounded-full w-12 h-12 md:w-24 md:h-24 lg:w-28 lg:h-28 flex flex-col items-center justify-center shadow-xl border-2 md:border-4 border-white select-none shrink-0 transform rotate-3">
-                <span className="text-[6px] md:text-xs uppercase font-bold opacity-90 tracking-wider">GHC</span>
+              <div className="bg-red-700 text-white rounded-full w-12 h-12 md:w-24 md:h-24 lg:w-28 lg:h-28 flex flex-col items-center justify-center shadow-xl border-2 md:border-4 border-white select-none shrink-0 transform rotate-3">
+                <span className="text-white text-[6px] md:text-xs uppercase font-bold tracking-wider">GHC</span>
                 <span className="text-[9px] md:text-lg lg:text-xl font-black tracking-tight leading-none mt-0.5">
                   {activeDevice?.price ? activeDevice.price.toLocaleString() : '0'}
                 </span>
@@ -219,12 +212,14 @@ const Hero = () => {
             {/* Navigation Handles */}
             <button
               onClick={prevSlide}
+              aria-label="Previous featured product"
               className="hidden md:block absolute left-4 md:left-8 top-1/2 -translate-y-1/2 bg-red-100 hover:bg-red-200 shadow-md p-2 rounded-full text-red-700 opacity-0 group-hover:opacity-100 transition-all duration-300 border border-red-200 z-30 cursor-pointer hover:scale-110 active:scale-95"
             >
               <FaAngleLeft className="w-5 h-5" />
             </button>
             <button
               onClick={nextSlide}
+              aria-label="Next featured product"
               className="hidden md:block absolute right-4 md:right-8 top-1/2 -translate-y-1/2 bg-red-100 hover:bg-red-200 shadow-md p-2 rounded-full text-red-700 opacity-0 group-hover:opacity-100 transition-all duration-300 border border-red-200 z-30 cursor-pointer hover:scale-110 active:scale-95"
             >
               <FaAngleRight className="w-5 h-5" />
@@ -240,6 +235,8 @@ const Hero = () => {
             <button
               key={dotIdx}
               onClick={() => setCurrentIndex(dotIdx)}
+              aria-label={`Show featured product ${dotIdx + 1}: ${devices[dotIdx]?.name || 'product'}`}
+              aria-pressed={currentIndex === dotIdx}
               className={`h-1.5 transition-all duration-300 rounded-full cursor-pointer ${currentIndex === dotIdx ? 'w-6 bg-red-600' : 'w-1.5 bg-slate-300 hover:bg-slate-400'
                 }`}
             />

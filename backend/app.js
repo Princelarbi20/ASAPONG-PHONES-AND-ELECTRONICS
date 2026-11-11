@@ -13,17 +13,20 @@ import { authRouter } from './route/authRouter.js';
 import { verifyToken } from './middleware/verifyToken.js';
 import { refreshToken } from './middleware/refreshToken.js';
 import isAdmin from './middleware/isAdmin.js';
-import { issueCsrfToken } from './middleware/csrfProtection.js';
+import { csrfProtection, issueCsrfToken } from './middleware/csrfProtection.js';
 
 // Paystack webhook (needs the raw body, so it is registered before express.json())
 import { paystackWebhookController } from './controllers/Payment-controllers/paymentWebhookController.js';
+import { validateRequest } from './middleware/requestValidation.js';
+import { assertTestEnvironment } from './config/environmentSafety.js';
 
 const app = express();
 dotenv.config();
+assertTestEnvironment();
 
 
 for (const variable of [
-  'MONGO_URI',
+  ...(process.env.NODE_ENV === 'test' ? ['TEST_MONGO_URI'] : ['MONGO_URI']),
   'ACCESS_TOKEN_SECRET',
   'ACCESS_TOKEN_EXPIRE',
   'REFRESH_TOKEN_SECRET',
@@ -50,12 +53,13 @@ app.use(
 );
 
 
-app.post('/api/v1/payments/webhook',express.raw({ type: 'application/json' }),paystackWebhookController);
+app.post('/api/v1/payments/webhook',express.raw({ type: 'application/json' }),validateRequest({ query: {} }),paystackWebhookController);
 
 // Middlewares
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
-app.get('/api/v1/csrf-token', (req, res) => {
+app.use('/api/v1', csrfProtection);
+app.get('/api/v1/csrf-token', validateRequest({ query: {}, body: {} }), (req, res) => {
   res.json({ csrfToken: issueCsrfToken(req, res) });
 });
 app.use('/api/v1', adminRouter);
@@ -65,6 +69,12 @@ app.use('/api/v1', paymentRouter);
 
 app.use('/uploads/certificates', verifyToken, refreshToken, isAdmin,
   express.static(path.join(__dirname, 'uploads', 'certificates')));
+app.use('/uploads', (req, res, next) => {
+  if (req.path === '/certificates' || req.path.startsWith('/certificates/')) {
+    return res.status(404).json({ success: false, message: 'File not found.' });
+  }
+  return next();
+});
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // API Endpoints
@@ -73,6 +83,6 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server is running on port ${PORT}`);
 });

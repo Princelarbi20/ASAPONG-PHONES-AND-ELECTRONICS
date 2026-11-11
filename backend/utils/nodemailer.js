@@ -14,6 +14,11 @@ const sendEmail = async (arg1, toParam, subjectParam, htmlParam) => {
     html = htmlParam;
   }
 
+  if (process.env.NODE_ENV === 'test' || process.env.EMAIL_SINK === 'true') {
+    console.info(`[email-sink] suppressed email to ${String(to || '').replace(/[^@.a-zA-Z0-9_-]/g, '')} (${subject || 'no subject'})`);
+    return { success: true, messageId: 'test-email-sink' };
+  }
+
   const authUser = process.env.EMAIL_USER?.trim() || '';
   const authPass = process.env.EMAIL_PASS?.trim() || '';
   if (!to || !authUser || !authPass) {

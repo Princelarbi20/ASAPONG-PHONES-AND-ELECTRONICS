@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import axios from 'axios';
+import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios';
 import toast from 'react-hot-toast';
 import { Loader2, AlertCircle, ArrowLeft, ShoppingCart, Heart, ShieldCheck, Truck, RotateCcw, Settings, Info, Sparkles, Star } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { authAction } from '../redux/store';
-
-// Get backend base URL from Vite environment variables with a fallback
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -32,7 +29,7 @@ export default function ProductDetail() {
         setLoading(true);
         setErrorMsg('');
 
-        const response = await axios.get(`${API_BASE_URL}/api/v1/get-All-product`, {
+        const response = await axiosInstance.get('/get-All-product', {
           withCredentials: true
         });
 
@@ -80,12 +77,8 @@ export default function ProductDetail() {
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
     if (typeof imgStr !== 'string') return 'https://placehold.co/600x400?text=No+Image';
-    if (imgStr.startsWith('http')) return imgStr;
-    const normalizedPath = imgStr.replace(/\\/g, '/');
-    if (normalizedPath.startsWith('/uploads/')) {
-      return `${API_BASE_URL}${normalizedPath}`;
-    }
-    return `${API_BASE_URL}/${normalizedPath.replace(/^\//, '')}`;
+    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return imgStr;
+    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
   };
 
   const handleAddToCart = async () => {
@@ -100,7 +93,7 @@ export default function ProductDetail() {
     try {
       const productId = product._id || product.id;
 
-      const response = await axios.post(`${API_BASE_URL}/api/v1/add-to-cart`,
+      const response = await axiosInstance.post('/add-to-cart',
         { productId, quantity },
         { withCredentials: true }
       );

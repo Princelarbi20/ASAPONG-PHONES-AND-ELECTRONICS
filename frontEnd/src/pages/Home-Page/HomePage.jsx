@@ -8,8 +8,8 @@ export const HomePage = () => {
   return (
     <div className='screen w-full'>
       <Navbar globalSearchQuery={globalSearchQuery} setGlobalSearchQuery={setGlobalSearchQuery} />
-     <CategoriesMarquee />
       <main>
+       <CategoriesMarquee />
         <div className='w-full'>
          <Outlet />
         </div>

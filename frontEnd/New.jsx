@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axiosInstance from './src/lib/axios';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,7 +13,7 @@ const New = () => {
     setIsLoading(true);
     setErrorMsg('');
     try {
-      const { data } = await axios.post('/api/v1/user-login', credentials);
+      const { data } = await axiosInstance.post('/user-login', credentials);
       if (data.user?.isSuspended) throw new Error('Your account is suspended. Contact customer care.');
       navigate(data.user?.role === 'ADMIN' ? '/admin/dashboard' : '/');
     } catch (error) {

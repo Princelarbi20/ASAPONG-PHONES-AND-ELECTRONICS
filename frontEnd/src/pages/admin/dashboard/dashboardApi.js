@@ -1,13 +1,11 @@
 import axios from 'axios';
+import axiosInstance, { API_ENDPOINT_BASE } from '@/lib/axios';
 
 /* ------------------------------------------------------------------ */
 /*  API Configuration                                                 */
 /* ------------------------------------------------------------------ */
 
-const configuredApiBase = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
-export const API_BASE = /\/api\/v1$/.test(configuredApiBase)
-  ? configuredApiBase
-  : `${configuredApiBase}/api/v1`;
+export const API_BASE = API_ENDPOINT_BASE;
 
 export const DASHBOARD_STATS_URL = `${API_BASE}/dashboard-stats`;
 export const DASHBOARD_CHARTS_URL = `${API_BASE}/dashboard-charts`;
@@ -27,7 +25,7 @@ const REQUIRED_SECTIONS = ['summary', 'revenue', 'orders', 'products'];
 export const fetchDashboardStats = async (days = 30, signal) => {
   const token = getAuthToken();
 
-  const { data } = await axios.get(DASHBOARD_STATS_URL, {
+  const { data } = await axiosInstance.get('/dashboard-stats', {
     params: { days },
     signal,
     withCredentials: true,

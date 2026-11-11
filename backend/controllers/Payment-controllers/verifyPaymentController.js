@@ -26,7 +26,7 @@ export const verifyPaymentController = async (req, res) => {
     }
 
     // Optional ownership check (adjust to your auth middleware)
-    if (req.user && order.user.toString() !== String(req.user.id || req.user._id)) {
+    if (!req.user || order.user.toString() !== String(req.user.id || req.user._id)) {
       return res.status(403).json({
         success: false,
         message: "Forbidden.",

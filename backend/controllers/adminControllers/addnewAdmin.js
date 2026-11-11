@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 
 export const addnewAdmin = async (req, res) => {
   try {
-    const { userName, phone, email, password } = req.body;
+    const { userName, phone, email, password, role = 'ADMIN' } = req.body;
 
     // 1. Verify credentials input fields
     if (!userName || !phone || !email || !password) {
@@ -14,9 +14,12 @@ export const addnewAdmin = async (req, res) => {
     }
 
     // 2. Check if user already exists (Added missing 'await')
-    const findUser = await Register.findOne({ email: email.toLowerCase() });
+    const normalizedEmail = email.trim().toLowerCase();
+    let normalizedPhone = phone.replace(/\D/g, '');
+    if (normalizedPhone.startsWith('233') && normalizedPhone.length === 12) normalizedPhone = `0${normalizedPhone.slice(3)}`;
+    const findUser = await Register.findOne({ $or: [{ email: normalizedEmail }, { phone: normalizedPhone }] });
     if (findUser) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
         message: "This email has already been registered"
       });
@@ -28,11 +31,13 @@ export const addnewAdmin = async (req, res) => {
     // 4. Create the new Admin record in MongoDB (Added missing 'await')
     // Model.create automatically saves the document, no need for .save()
     const newAdmin = await Register.create({
-      userName,
+      userName: userName.trim(),
       phone,
-      email: email.toLowerCase(),
+      email: normalizedEmail,
+      phone: normalizedPhone,
       password: hashedPassword,
-      role: "ADMIN"
+      role,
+      isVerified: true,
     });
 
     // Do not return a credential for another account in this response.
@@ -49,6 +54,7 @@ export const addnewAdmin = async (req, res) => {
     });
 
   } catch (error) {
+    if (error?.code === 11000) return res.status(409).json({ success: false, message: 'An account already exists with that email or phone number.' });
     console.error("Admin registration error:", error);
     return res.status(500).json({
       success: false,

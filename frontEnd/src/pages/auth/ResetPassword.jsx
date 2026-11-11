@@ -1,52 +1,40 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axiosInstance from '../../lib/axios';
 import toast from 'react-hot-toast';
 import { withCsrf } from '../../lib/csrf';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 const ResetPassword = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
   const navigate = useNavigate();
 
   // Regex matching backend validation requirements
-  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      toast.error('Please fill in all password fields.');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      toast.error('New password and confirmation do not match.');
-      return;
-    }
-
-    if (currentPassword === newPassword) {
-      toast.error('Choose a new password different from your current password.');
-      return;
-    }
-
-    if (!passwordRegex.test(newPassword)) {
-      toast.error('New password must be at least 8 characters and include uppercase, lowercase, number, and symbol.');
+    const nextErrors = {};
+    if (!currentPassword.trim()) nextErrors.currentPassword = 'Current password is required.';
+    if (!newPassword) nextErrors.newPassword = 'New password is required.';
+    else if (!passwordRegex.test(newPassword)) nextErrors.newPassword = 'Use at least 8 characters with upper and lowercase letters, a number, and a symbol.';
+    if (!confirmPassword) nextErrors.confirmPassword = 'Please confirm your new password.';
+    else if (newPassword !== confirmPassword) nextErrors.confirmPassword = 'Passwords do not match.';
+    if (currentPassword && newPassword && currentPassword === newPassword) nextErrors.newPassword = 'Choose a password different from your current one.';
+    setFormErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
       return;
     }
 
     setIsLoading(true);
     try {
       const config = await withCsrf({ withCredentials: true });
-      const response = await axios.put(
-        `${API_BASE_URL}/api/v1/reset-password`,
-        { currentPassword, newPassword },
-        config
-      );
+      const response = await axiosInstance.put('/reset-password', { currentPassword, newPassword }, config);
 
       if (response.data.success) {
         toast.success(response.data.message || 'Password reset successfully!');
@@ -93,12 +81,17 @@ const ResetPassword = () => {
             </label>
             <input
               type="password"
+              required
+              maxLength={128}
+              aria-invalid={Boolean(formErrors.currentPassword)}
+              onBlur={() => { if (!currentPassword.trim()) setFormErrors((errors) => ({ ...errors, currentPassword: 'Current password is required.' })); }}
               value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
+              onChange={(e) => { setCurrentPassword(e.target.value); setFormErrors((errors) => ({ ...errors, currentPassword: '' })); }}
               disabled={isLoading}
               placeholder="••••••••"
               className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
             />
+            {formErrors.currentPassword && <p className="mt-1 text-xs text-red-600">{formErrors.currentPassword}</p>}
           </div>
 
           <div>
@@ -107,14 +100,20 @@ const ResetPassword = () => {
             </label>
             <input
               type="password"
+              required
+              minLength={8}
+              maxLength={128}
+              aria-invalid={Boolean(formErrors.newPassword)}
+              onBlur={() => { if (newPassword && !passwordRegex.test(newPassword)) setFormErrors((errors) => ({ ...errors, newPassword: 'Password does not meet the requirements.' })); }}
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              onChange={(e) => { setNewPassword(e.target.value); setFormErrors((errors) => ({ ...errors, newPassword: '' })); }}
               disabled={isLoading}
               placeholder="••••••••"
               className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
             />
+            {formErrors.newPassword && <p className="mt-1 text-xs text-red-600">{formErrors.newPassword}</p>}
             <p className="text-[10px] text-gray-500 mt-1">
-              Must be 8+ chars with uppercase, lowercase, number, and symbol (@$!%*?&#).
+              Use 8–128 characters with uppercase, lowercase, a number, and a symbol.
             </p>
           </div>
 
@@ -124,12 +123,16 @@ const ResetPassword = () => {
             </label>
             <input
               type="password"
+              required
+              maxLength={128}
+              aria-invalid={Boolean(formErrors.confirmPassword)}
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => { setConfirmPassword(e.target.value); setFormErrors((errors) => ({ ...errors, confirmPassword: '' })); }}
               disabled={isLoading}
               placeholder="••••••••"
               className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
             />
+            {formErrors.confirmPassword && <p className="mt-1 text-xs text-red-600">{formErrors.confirmPassword}</p>}
           </div>
 
           <button

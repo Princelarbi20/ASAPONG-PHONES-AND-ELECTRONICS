@@ -33,16 +33,24 @@ export const paystackWebhookController = async (req, res) => {
       return res.sendStatus(401);
     }
 
-    const event = JSON.parse(rawBody.toString("utf8"));
+    let event;
+    try {
+      event = JSON.parse(rawBody.toString("utf8"));
+    } catch {
+      return res.status(400).json({ success: false, message: "Invalid webhook JSON." });
+    }
+    if (!event || typeof event !== "object" || Array.isArray(event)) {
+      return res.status(400).json({ success: false, message: "Invalid webhook payload." });
+    }
 
     // 2. Acknowledge events we don't care about
-    if (!HANDLED_EVENTS.includes(event.event)) {
+    if (typeof event.event !== "string" || !HANDLED_EVENTS.includes(event.event)) {
       return res.sendStatus(200);
     }
 
     const reference = event.data?.reference;
-    if (!reference) {
-      return res.sendStatus(200);
+    if (typeof reference !== "string" || !/^[A-Za-z0-9_-]{8,120}$/.test(reference)) {
+      return res.status(400).json({ success: false, message: "Invalid payment reference." });
     }
 
     // 3. Find the order by reference, falling back to metadata.orderId

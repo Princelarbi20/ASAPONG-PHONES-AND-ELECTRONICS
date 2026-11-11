@@ -3,7 +3,7 @@ import { Product } from "../../modules/productSchema.js";
 import { normalizeUploadedImagePaths } from "../../utils/normalizeImagePaths.js";
 import { getCloudinaryUploadMeta } from "../../utils/cloudinaryHelpers.js";
 
-export const updateProductController = async (req, res) => {
+export const updateProductController = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -81,7 +81,6 @@ export const updateProductController = async (req, res) => {
 
     res.status(200).json({ success: true, product: updatedProduct });
   } catch (error) {
-    console.error("Update error log:", error);
-    res.status(500).json({ success: false, message: error.message });
+    next(error);
   }
 };

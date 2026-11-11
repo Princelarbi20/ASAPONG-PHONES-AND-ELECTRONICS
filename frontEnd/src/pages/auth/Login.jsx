@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import axiosInstance from '../../lib/axios'
 import toast from 'react-hot-toast'
 import CommonForms from './ComonForms' 
 import { loginFormController } from '../../Data/Data'
@@ -11,8 +11,6 @@ import { withCsrf } from '../../lib/csrf'
 
 const initialState = { email: '', password: '' }
 
-// Grab the API base URL from Vite environment variables
-const API_URL = import.meta.env.VITE_API_BASE_URL || '';
 const Login = () => {
   const [formData, setFormData] = useState(initialState)
   const [isLoading, setIsLoading] = useState(false)
@@ -37,9 +35,7 @@ const Login = () => {
     try {
       // 1. Fetch baseline CSRF configuration with credentials enabled
       const baseConfig = await withCsrf({ withCredentials: true });
-      
-      // 2. Send login request using the environment variable URL
-      const response = await axios.post(`${API_URL}/api/v1/user-login`, formData, baseConfig);
+      const response = await axiosInstance.post('/user-login', formData, baseConfig);
       const { user, accountType } = response.data;
 
       // 3. Persist display data in Redux (JWT remains stored in HttpOnly cookie)
@@ -57,8 +53,6 @@ const Login = () => {
       }
       
     } catch (error) {
-      console.error("Login component trace logs:", error);
-
       // Extract backend response error message
       const serverMessage = error.response?.data?.message || 'Login failed. Please try again.';
 

@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { NavLink, Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import {
-  Building2, ClipboardList, CreditCard, LayoutDashboard, LogOut, Menu, Package, ShoppingBag, Store, UserPlus, Users, X,
+  Building2, ClipboardList, CreditCard, LayoutDashboard, LogOut, Menu, Moon, Package, ShoppingBag, Store, Sun, UserPlus, Users, X,
 } from 'lucide-react'
 import Logo from '@/component/Logo'
 import { cx } from './ui'
@@ -67,7 +67,7 @@ const SidebarContent = ({ onNavigate, onLogout }) => (
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   cx(
-                    'flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors',
+                    'admin-nav-link flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors',
                     isActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   )
                 }
@@ -105,6 +105,17 @@ const SidebarContent = ({ onNavigate, onLogout }) => (
 // Used as the layout route for /admin: the active admin page renders through <Outlet />.
 const DashboardLayout = ({ title, children }) => {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const menuButtonRef = useRef(null)
+  const closeButtonRef = useRef(null)
+  const drawerRef = useRef(null)
+  const wasDrawerOpen = useRef(false)
+  const [theme, setTheme] = useState(() => {
+    try {
+      return window.localStorage.getItem('admin-theme') === 'dark' ? 'dark' : 'light'
+    } catch {
+      return 'light'
+    }
+  })
   const location = useLocation()
   const navigate = useNavigate()
   const dispatch = useDispatch()
@@ -134,7 +145,27 @@ const DashboardLayout = ({ title, children }) => {
     if (!drawerOpen) return undefined
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    const onKeyDown = (event) => event.key === 'Escape' && setDrawerOpen(false)
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setDrawerOpen(false)
+        return
+      }
+      if (event.key !== 'Tab') return
+
+      const focusable = drawerRef.current?.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+      if (!focusable?.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
     window.addEventListener('keydown', onKeyDown)
     return () => {
       document.body.style.overflow = previous
@@ -142,15 +173,28 @@ const DashboardLayout = ({ title, children }) => {
     }
   }, [drawerOpen])
 
+  useEffect(() => {
+    if (drawerOpen) {
+      wasDrawerOpen.current = true
+      closeButtonRef.current?.focus()
+    } else if (wasDrawerOpen.current) {
+      wasDrawerOpen.current = false
+      menuButtonRef.current?.focus()
+    }
+  }, [drawerOpen])
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div id="admin-dashboard" data-theme={theme} className="min-h-screen bg-slate-50 text-slate-900">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-slate-200 bg-white lg:block">
         <SidebarContent onLogout={handleLogout} />
       </aside>
 
       {/* Tablet / mobile drawer */}
-      <div className={cx('fixed inset-0 z-50 lg:hidden', drawerOpen ? 'visible' : 'invisible')} aria-hidden={!drawerOpen}>
+      <div
+        className={cx('fixed inset-0 z-50 lg:hidden', drawerOpen ? 'visible' : 'invisible')}
+        inert={!drawerOpen}
+      >
         <div
           className={cx('absolute inset-0 bg-slate-900/40 transition-opacity duration-200', drawerOpen ? 'opacity-100' : 'opacity-0')}
           onClick={() => setDrawerOpen(false)}
@@ -159,6 +203,7 @@ const DashboardLayout = ({ title, children }) => {
           role="dialog"
           aria-modal="true"
           aria-label="Admin navigation"
+          ref={drawerRef}
           className={cx(
             'absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-white shadow-xl transition-transform duration-200 ease-out',
             drawerOpen ? 'translate-x-0' : '-translate-x-full'
@@ -166,6 +211,7 @@ const DashboardLayout = ({ title, children }) => {
         >
           <button
             type="button"
+            ref={closeButtonRef}
             onClick={() => setDrawerOpen(false)}
             aria-label="Close menu"
             className="absolute right-2 top-2 grid h-10 w-10 place-items-center rounded-lg text-slate-500 hover:bg-slate-100"
@@ -176,10 +222,11 @@ const DashboardLayout = ({ title, children }) => {
         </div>
       </div>
 
-      <div className="lg:pl-64">
+      <div className="lg:pl-64" inert={drawerOpen}>
         <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur sm:px-6">
           <button
             type="button"
+            ref={menuButtonRef}
             onClick={() => setDrawerOpen(true)}
             aria-label="Open menu"
             className="-ml-2 grid h-11 w-11 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 lg:hidden"
@@ -190,6 +237,19 @@ const DashboardLayout = ({ title, children }) => {
           <h1 className="truncate text-base font-semibold text-slate-900">{pageTitle}</h1>
 
           <div className="ml-auto flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setTheme((current) => {
+                const next = current === 'dark' ? 'light' : 'dark'
+                try { window.localStorage.setItem('admin-theme', next) } catch { /* Storage may be unavailable. */ }
+                return next
+              })}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              className="grid h-10 w-10 place-items-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              {theme === 'dark' ? <Moon className="h-5 w-5" aria-hidden="true" /> : <Sun className="h-5 w-5" aria-hidden="true" />}
+            </button>
             <span className="hidden max-w-40 truncate text-sm font-medium text-slate-600 sm:block">{displayName}</span>
             <span
               aria-hidden="true"
@@ -200,7 +260,11 @@ const DashboardLayout = ({ title, children }) => {
           </div>
         </header>
 
-        <main className="px-4 py-6 sm:px-6 lg:px-8">{children ?? <Outlet />}</main>
+        <main className="px-4 py-6 sm:px-6 lg:px-8">
+          <div key={location.pathname} className="admin-page-enter">
+            {children ?? <Outlet />}
+          </div>
+        </main>
       </div>
     </div>
   )

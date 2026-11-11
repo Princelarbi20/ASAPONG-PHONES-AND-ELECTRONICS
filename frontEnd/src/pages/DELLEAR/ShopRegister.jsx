@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
-import { getCsrfToken } from '../../lib/csrf';
+import axiosInstance from '../../lib/axios';
 import { useNavigate } from 'react-router-dom'; // 👈 Added React Router Hook
-
-// Get backend base URL from Vite environment variables with a fallback
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export const ShopRegister = () => {
   const navigate = useNavigate(); // 👈 Initialize navigation controller
@@ -60,6 +57,12 @@ export const ShopRegister = () => {
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files);
 
+    if (selectedFiles.length === 0) {
+      setFiles([]);
+      setError('');
+      return;
+    }
+
     if (selectedFiles.length > 3) {
       setError('You can upload a maximum of 3 certificate documents.');
       return;
@@ -71,6 +74,11 @@ export const ShopRegister = () => {
       return;
     }
 
+    if (selectedFiles.some((file) => file.size > 5 * 1024 * 1024)) {
+      setError('Each certificate must be 5 MB or smaller.');
+      return;
+    }
+
     setError('');
     setFiles(selectedFiles);
   };
@@ -78,16 +86,25 @@ export const ShopRegister = () => {
   // Handle Submit 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
+    const phoneDigits = formData.number.replace(/[\s()-]/g, '');
+    if (formData.shopName.trim().length < 2 || formData.shopName.trim().length > 120) return setError('Shop name must be between 2 and 120 characters.');
+    if (!formData.category.trim() || formData.category.trim().length > 100) return setError('Enter a category up to 100 characters.');
+    if (!formData.description.trim() || formData.description.trim().length > 5000) return setError('Description is required and must be 5,000 characters or fewer.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) return setError('Enter a valid business email address.');
+    if (!/^(?:\+?233\d{9}|0\d{9})$/.test(phoneDigits)) return setError('Enter a valid Ghana phone number.');
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/.test(formData.password)) return setError('Password must be 8–128 characters with uppercase, lowercase, a number, and a symbol.');
+    if (files.length === 0) return setError('Upload at least one PDF certificate.');
     setLoading(true);
     setError('');
     setSuccess('');
 
     const dataToSend = new FormData();
-    dataToSend.append('shopName', formData.shopName);
-    dataToSend.append('description', formData.description);
-    dataToSend.append('category', formData.category);
-    dataToSend.append('email', formData.email);
-    dataToSend.append('number', formData.number);
+    dataToSend.append('shopName', formData.shopName.trim());
+    dataToSend.append('description', formData.description.trim());
+    dataToSend.append('category', formData.category.trim());
+    dataToSend.append('email', formData.email.trim());
+    dataToSend.append('number', formData.number.trim());
     dataToSend.append('password', formData.password);
 
     files.forEach((file) => {
@@ -95,20 +112,7 @@ export const ShopRegister = () => {
     });
 
     try {
-      const csrfToken = await getCsrfToken();
-      const response = await fetch(`${API_BASE_URL}/api/v1/create-shop`, {
-        method: 'POST',
-        body: dataToSend,
-        credentials: 'include',
-        headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Something went wrong during registration.');
-      }
-
+      const response = await axiosInstance.post('/create-shop', dataToSend);
       setSuccess('Shop application request and documents submitted successfully! Redirecting...');
       
       // Reset form state variables
@@ -282,6 +286,8 @@ export const ShopRegister = () => {
                   type="text"
                   name="shopName"
                   required
+                  minLength={2}
+                  maxLength={120}
                   value={formData.shopName}
                   onChange={handleInputChange}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
@@ -295,6 +301,7 @@ export const ShopRegister = () => {
                   name="category"
                   placeholder="e.g. Electronics, Clothing"
                   required
+                  maxLength={100}
                   value={formData.category}
                   onChange={handleInputChange}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
@@ -309,6 +316,7 @@ export const ShopRegister = () => {
                 name="description"
                 rows="3"
                 required
+                maxLength={5000}
                 value={formData.description}
                 onChange={handleInputChange}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
@@ -323,6 +331,7 @@ export const ShopRegister = () => {
                   type="email"
                   name="email"
                   required
+                  maxLength={254}
                   value={formData.email}
                   onChange={handleInputChange}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
@@ -332,9 +341,11 @@ export const ShopRegister = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700">Contact Number</label>
                 <input
-                  type="text"
+                  type="tel"
                   name="number"
                   required
+                  maxLength={20}
+                  placeholder="+233 24 123 4567"
                   value={formData.number}
                   onChange={handleInputChange}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
@@ -349,6 +360,8 @@ export const ShopRegister = () => {
                 type="password"
                 name="password"
                 required
+                minLength={8}
+                maxLength={128}
                 value={formData.password}
                 onChange={handleInputChange}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
@@ -374,6 +387,7 @@ export const ShopRegister = () => {
                         multiple
                         accept=".pdf"
                         required
+                        onClick={(event) => { event.currentTarget.value = ''; }}
                         onChange={handleFileChange}
                         className="sr-only"
                         id="file-upload"

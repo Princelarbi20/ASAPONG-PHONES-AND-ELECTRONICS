@@ -1,6 +1,6 @@
 import React from 'react'
 import { AlertTriangle, Inbox, Minus, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react'
-import { getStatusTone, humanize } from './formatters'
+import { getOrderStatusColor, getStatusTone, humanize, isOrderStatus } from './formatters'
 
 export const cx = (...classes) => classes.filter(Boolean).join(' ')
 
@@ -13,7 +13,7 @@ export const TONE_CLASSES = {
 }
 
 export const Card = ({ title, subtitle, action, children, className = '', bodyClassName = '' }) => (
-  <section className={cx('rounded-xl border border-slate-200 bg-white shadow-sm', className)}>
+  <section className={cx('admin-card-motion rounded-xl border border-slate-200 bg-white shadow-sm', className)}>
     {(title || action) && (
       <header className="flex items-start justify-between gap-3 px-5 pt-5">
         <div className="min-w-0">
@@ -31,19 +31,32 @@ export const Skeleton = ({ className = '' }) => (
   <div className={cx('animate-pulse rounded-md bg-slate-200/70', className)} />
 )
 
-export const Badge = ({ tone = 'neutral', children, className = '' }) => (
+export const Badge = ({ tone = 'neutral', children, className = '', style }) => (
   <span
     className={cx(
       'inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
       TONE_CLASSES[tone],
       className
     )}
+    style={style}
   >
     {children}
   </span>
 )
 
-export const StatusBadge = ({ status }) => <Badge tone={getStatusTone(status)}>{humanize(status) || 'Unknown'}</Badge>
+export const StatusBadge = ({ status }) => {
+  const tone = getStatusTone(status)
+  const usesOrderPalette = isOrderStatus(status)
+  return (
+    <Badge
+      tone={usesOrderPalette ? 'neutral' : tone}
+      className={usesOrderPalette ? 'admin-status-badge' : ''}
+      style={usesOrderPalette ? { '--status-color': getOrderStatusColor(status) } : undefined}
+    >
+      {humanize(status) || 'Unknown'}
+    </Badge>
+  )
+}
 
 // Real growth only: `value` comes straight from the API and is null when there is no previous data.
 export const GrowthBadge = ({ value }) => {
@@ -85,7 +98,7 @@ const HINT_TONES = {
 }
 
 export const StatCard = ({ label, value, icon: Icon, hint, hintTone = 'muted', className = '' }) => (
-  <div className={cx('rounded-xl border border-slate-200 bg-white p-5 shadow-sm', className)}>
+  <div className={cx('admin-card-motion rounded-xl border border-slate-200 bg-white p-5 shadow-sm', className)}>
     <div className="flex items-center justify-between gap-3">
       <p className="text-sm font-medium text-slate-500">{label}</p>
       {Icon && (
@@ -94,7 +107,7 @@ export const StatCard = ({ label, value, icon: Icon, hint, hintTone = 'muted', c
         </span>
       )}
     </div>
-    <p className="mt-3 truncate text-2xl font-semibold tracking-tight text-slate-900 sm:text-[1.65rem]">{value}</p>
+    <p key={String(value)} className="admin-stat-value mt-3 truncate text-2xl font-semibold tracking-tight text-slate-900 sm:text-[1.65rem]">{value}</p>
     {hint && <p className={cx('mt-1 truncate text-xs font-medium', HINT_TONES[hintTone])}>{hint}</p>}
   </div>
 )

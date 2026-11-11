@@ -26,7 +26,7 @@ export const initializePaymentController = async (req, res) => {
     }
 
     // Ownership check
-    if (req.user && order.user._id.toString() !== String(req.user.id || req.user._id)) {
+    if (!req.user || order.user._id.toString() !== String(req.user.id || req.user._id)) {
       return res.status(403).json({
         success: false,
         message: "Forbidden.",

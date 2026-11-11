@@ -126,9 +126,9 @@ const AdminDashboard = () => {
           <>
             {error && <ErrorState compact message={`${error} Showing the last loaded data.`} onRetry={refetch} />}
 
-            <div className={cx('space-y-6 transition-opacity duration-200', refreshing && 'opacity-60')} aria-busy={refreshing}>
+            <div key={`${days}-${updatedAt?.getTime() ?? 'initial'}`} className={cx('space-y-6 transition-opacity duration-200', refreshing && 'opacity-60')} aria-busy={refreshing}>
               {/* KPI cards */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="admin-stagger grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <Link to="/admin/transactions" aria-label="View all payment transactions" className="block rounded-xl transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
                   <StatCard
                     label="Total revenue"
@@ -164,7 +164,7 @@ const AdminDashboard = () => {
               </div>
 
               {/* Revenue + order status */}
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <div className="admin-stagger grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <div className="lg:col-span-2">
                   <RevenueChart revenue={stats.revenue} days={activeDays} />
                 </div>
@@ -172,7 +172,7 @@ const AdminDashboard = () => {
               </div>
 
               {/* Products */}
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+              <div className="admin-stagger grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                 <TopSellingCard items={stats.products.topSelling} />
                 <LowStockCard products={stats.products} />
                 <div className="md:col-span-2 xl:col-span-1">

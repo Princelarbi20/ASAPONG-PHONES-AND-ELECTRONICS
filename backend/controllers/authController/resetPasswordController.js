@@ -1,5 +1,6 @@
 import { Register } from "../../modules/userRegister.js";
 import bcrypt from "bcrypt";
+import { isValidPassword } from "../../middleware/requestValidation.js";
 
 export const resetPasswordController = async (req, res) => {
     try {
@@ -13,8 +14,7 @@ export const resetPasswordController = async (req, res) => {
                 });
         }
 
-        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
-        if (!passwordRegex.test(newPassword)) {
+        if (!isValidPassword(newPassword)) {
             return res.status(400).json({
                 success: false,
                 message: "New password must be at least 8 characters and include uppercase, lowercase, number, and symbol."

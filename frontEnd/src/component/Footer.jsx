@@ -43,18 +43,18 @@ export const Footer = () => {
   ];
 
   const socialIcons = [
-    { icon: FacebookIcon, link: "https://www.facebook.com" },
-    { icon: InstagramIcon, link: "https://www.instagram.com" },
-    { icon: TwitterIcon, link: "https://twitter.com" },
-    { icon: LinkedinIcon, link: "https://www.linkedin.com" },
+    { icon: FacebookIcon, label: "Facebook Messenger", link: "https://www.facebook.com" },
+    { icon: InstagramIcon, label: "Instagram", link: "https://www.instagram.com" },
+    { icon: TwitterIcon, label: "Twitter", link: "https://twitter.com" },
+    { icon: LinkedinIcon, label: "LinkedIn", link: "https://www.linkedin.com" },
   ];
 
   return (
-    <footer className="px-4 sm:flex sm:px-6 md:px-8 bg-red-300 border-t border-slate-100 md:justify-center md:text-center md:items-center">
+    <footer className="px-4 sm:flex sm:px-6 md:px-8 bg-slate-50 border-t border-slate-200 md:justify-center md:text-center md:items-center">
       <div className="max-w-7xl mx-auto flex sm:justify-center sm:text-center sm">
         
         {/* MAIN LAYOUT CONTAINER */}
-        <div className="flex flex-co2 lg:flex-row justify-between gap-10 py-12 border-b border-slate-200 text-slate-500 ">
+        <div className="flex flex-co2 lg:flex-row justify-between gap-10 py-12 border-b border-slate-200 text-slate-700 ">
 
           {/* LEFT SECTION (Brand & Description) */}
           <div className="flex flex-col items-center text-center lg:items-start lg:text-left space-y-5 lg:max-w-sm">
@@ -74,6 +74,7 @@ export const Footer = () => {
                   href={item.link}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label={item.label}
                   className="group flex items-center justify-center w-10 h-10 bg-slate-50 hover:bg-green-50 border border-slate-200 rounded-full shadow-sm hover:shadow transition-all duration-200"
                 >
                   <item.icon />
@@ -81,7 +82,7 @@ export const Footer = () => {
               ))}
             </div>
 
-             <div className="py-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs sm:text-sm text-red-600">
+             <div className="py-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs sm:text-sm text-red-700">
                <p className='text-center flex'>© 2026 StarTech. All Rights Reserved.</p>
                  <div className="flex gap-4">
             <Link to="/" className="hover:underline">Terms</Link>
@@ -94,7 +95,7 @@ export const Footer = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-6 w-full lg:max-w-3xl pt-4 lg:pt-0">
             {linkSections.map((section, index) => (
               <div key={index} className="flex flex-col items-center text-center sm:items-start sm:text-left">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-red-600 mb-4">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-red-700 mb-4">
                   {section.title}
                 </h3>
 

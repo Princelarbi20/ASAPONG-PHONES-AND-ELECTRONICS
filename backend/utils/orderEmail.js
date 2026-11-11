@@ -34,6 +34,62 @@ const buildItemsHtml = (order, logo) =>
     })
     .join('');
 
+export const buildCashOnDeliveryOrderEmail = (order) => {
+  const customerName = esc(order.user?.userName || 'Valued Customer');
+  const logo = process.env.CLOUDINARY_LOG || '';
+  const addr = order.shippingAddress || {};
+  const reference = order.orderNumber || order._id;
+  const itemLines = (order.items || []).map((item) =>
+    `- ${item.name || 'Product'} x ${Number(item.quantity) || 0}: ${money((Number(item.price) || 0) * (Number(item.quantity) || 0))}`
+  ).join('\n');
+  const body = `
+    <h2 style="color: #111827; margin: 0 0 14px 0; font-size: 18px; font-weight: 700;">Hello ${customerName},</h2>
+    <p style="color: #4b5563; margin: 0 0 12px 0; font-size: 14px; line-height: 1.6;">We received your order with Asapong. Your order is awaiting confirmation from our team.</p>
+    <div style="background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 14px; margin-bottom: 20px;">
+      <strong style="color: #9a3412;">Cash on Delivery</strong>
+      <p style="color: #7c2d12; font-size: 13px; line-height: 1.5; margin: 6px 0 0;">Your order has not been paid for. Please pay ${money(order.totalPrice)} in cash when your order is delivered.</p>
+    </div>
+    <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin-bottom: 20px;">
+      <span style="color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Order Reference</span><br />
+      <span style="color: #4f46e5; font-size: 16px; font-weight: 700;">#${esc(reference)}</span>
+    </div>
+    <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 15px; font-weight: 700;">Order Items</h3>
+    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="border-collapse: collapse; border: 1px solid #e5e7eb; font-size: 14px; margin-bottom: 20px;">
+      <tbody>
+        ${buildItemsHtml(order, logo)}
+        <tr style="background-color: #f9fafb;">
+          <td colspan="2" style="padding: 12px; font-weight: 700; color: #111827;">Total due on delivery</td>
+          <td align="right" style="padding: 12px; font-weight: 800; color: #4f46e5; font-size: 16px;">${money(order.totalPrice)}</td>
+        </tr>
+      </tbody>
+    </table>
+    <h3 style="color: #111827; margin: 0 0 8px 0; font-size: 15px; font-weight: 700;">Delivery Address</h3>
+    <p style="color: #4b5563; margin: 0 0 24px 0; font-size: 13px; line-height: 1.5; background-color: #f9fafb; padding: 12px; border-radius: 6px; border: 1px solid #e5e7eb;">
+      ${esc(addr.address)}<br />${esc(addr.city)}, ${esc(addr.state)} ${esc(addr.postalCode)}<br />${esc(addr.country)}
+    </p>
+    <p style="color: #111827; font-size: 14px; margin: 0; font-weight: 600;">Best regards,<br /><span style="color: #4f46e5;">The Asapong Team</span></p>
+  `;
+
+  return {
+    subject: `Order received — Cash on Delivery #${reference}`,
+    html: layout({ logo, body }),
+    text: [
+      `Hello ${order.user?.userName || 'Valued Customer'},`,
+      'We received your order with Asapong. It is awaiting confirmation from our team.',
+      'Payment method: Cash on Delivery. This order has not been paid for.',
+      `Amount due on delivery: ${money(order.totalPrice)}`,
+      `Order reference: #${reference}`,
+      'Items:', itemLines,
+      `Delivery address: ${[addr.address, addr.city, addr.state, addr.postalCode, addr.country].filter(Boolean).join(', ')}`,
+    ].filter(Boolean).join('\n'),
+  };
+};
+
+export const sendCashOnDeliveryOrderEmail = async (orderId) => {
+  const { order, recipientEmail } = await loadOrderForEmail(orderId);
+  return sendEmail({ to: recipientEmail, ...buildCashOnDeliveryOrderEmail(order) });
+};
+
 // Shared outer layout for all order emails
 const layout = ({ logo, body }) => `
 <!DOCTYPE html>

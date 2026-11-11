@@ -9,6 +9,7 @@ const orderSchema = new mongoose.Schema(
       sparse: true, // existing orders without a number don't conflict
       min: 100000,
       max: 999999,
+      validate: Number.isInteger,
     },
 
     user: {
@@ -24,13 +25,15 @@ const orderSchema = new mongoose.Schema(
           ref: "Product",
           required: true,
         },
-        name: { type: String, required: true },
-        image: { type: String },
-        price: { type: Number, required: true },
+        name: { type: String, required: true, trim: true, minlength: 1, maxlength: 120 },
+        image: { type: String, maxlength: 2048 },
+        price: { type: Number, required: true, min: 0, max: 100000000, validate: Number.isInteger },
         quantity: {
           type: Number,
           required: true,
           min: [1, "Quantity must be at least 1 unit"],
+          max: 1000,
+          validate: Number.isInteger,
         },
       },
     ],
@@ -38,6 +41,9 @@ const orderSchema = new mongoose.Schema(
     totalPrice: {
       type: Number,
       required: true,
+      min: 0,
+      max: 100000000,
+      validate: Number.isInteger,
     },
 
     status: {
@@ -66,8 +72,8 @@ const orderSchema = new mongoose.Schema(
 
     paymentDetails: {
       provider: String,
-      reference: { type: String, index: true, unique: true, sparse: true },
-      transactionId: String,
+      reference: { type: String, index: true, unique: true, sparse: true, maxlength: 120 },
+      transactionId: { type: String, maxlength: 120 },
       amount: Number,
       currency: String,
       channel: String,
@@ -78,16 +84,21 @@ const orderSchema = new mongoose.Schema(
     },
 
     shippingAddress: {
-      address: { type: String, required: true },
-      city: { type: String, required: true },
-      state: { type: String, required: true },
-      country: { type: String, required: true },
-      postalCode: { type: String, required: true },
+      address: { type: String, required: true, trim: true, maxlength: 200 },
+      city: { type: String, required: true, trim: true, maxlength: 100 },
+      state: { type: String, required: true, trim: true, maxlength: 100 },
+      country: { type: String, required: true, trim: true, maxlength: 100 },
+      postalCode: { type: String, required: true, trim: true, maxlength: 30 },
     },
   },
   {
     timestamps: true,
   }
 );
+
+orderSchema.index({ createdAt: -1, _id: -1 });
+orderSchema.index({ status: 1, createdAt: -1 });
+orderSchema.index({ paymentStatus: 1, createdAt: -1 });
+orderSchema.index({ totalPrice: 1, _id: 1 });
 
 export const Orders = mongoose.model("Orders", orderSchema);

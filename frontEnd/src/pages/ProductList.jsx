@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import Title from "@/component/Title";
-import axiosInstance, { API_ORIGIN } from "@/lib/axios";
+import axiosInstance, { resolveApiAssetUrl } from "@/lib/axios";
 import PaginationControls from "@/component/PaginationControls";
 import { formatPrice } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -11,12 +11,7 @@ const PAGE_SIZE = 10;
 
 const getSingleImageUrl = (imgStr) => {
   if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
-  if (imgStr.startsWith('http')) return imgStr;
-  const normalizedPath = imgStr.replace(/\\/g, '/');
-  if (normalizedPath.startsWith('/uploads/')) {
-    return `${API_ORIGIN}${normalizedPath}`;
-  }
-  return `${API_ORIGIN}/${normalizedPath.replace(/^\//, '')}`;
+  return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
 };
 
 // Inner Staggered Image Slider Component for Card Images

@@ -22,12 +22,12 @@ export const profileDetails=[
     to: "/contact",
   },
     {
-    id: 4,
+    id: 5,
     name: "Cart",
     to: "/contact",
   },
     {
-    id: 5,
+    id: 6,
     name: " Wishlist",
     to: "/wishlist",
   },

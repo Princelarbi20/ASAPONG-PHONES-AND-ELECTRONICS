@@ -52,7 +52,7 @@ const DestopCategory = () => {
           text2="CATEGORY"
           className="justify-center text-center gap-2 tracking-tight text-2xl md:text-3xl"
           text1className="text-slate-900 font-extrabold"
-          text2className="font-light text-rose-600 uppercase tracking-widest"
+          text2className="font-light text-[#881337] uppercase tracking-widest"
         />
         <p className="text-xs text-slate-500 mt-1 font-medium tracking-wide max-w-md mx-auto">
           Find exactly what you’re looking for. Select a category below to browse our latest collection.

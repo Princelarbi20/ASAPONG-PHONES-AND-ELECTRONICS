@@ -8,7 +8,7 @@ export const userLogoutController = async (req, res) => {
             path: '/'
         };
 
-        // 🚀 Clear the authentication cookies by forcing immediate expiration
+        //  Clear the authentication cookies by forcing immediate expiration
         res.cookie('token', '', { ...cookieOptions, maxAge: 0 });
         res.cookie('refreshToken', '', { ...cookieOptions, maxAge: 0 });
 

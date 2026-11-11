@@ -12,7 +12,7 @@ const RecentOrdersTable = ({ orders = [] }) => (
       <EmptyState icon={ShoppingBag} title="No orders yet" message="New orders will appear here as they come in." />
     ) : (
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm">
+        <table className="admin-animated-table w-full min-w-[720px] text-left text-sm">
           <thead>
             <tr className="border-y border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               {HEADERS.map((header, index) => (

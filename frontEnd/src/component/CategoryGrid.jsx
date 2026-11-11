@@ -1,13 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useOutletContext, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios';
 import { AlertCircle, ArrowUpDown, Eye, ShoppingCart, Heart, SlidersHorizontal, Tag, X } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useSelector, useDispatch } from 'react-redux';
 import { authAction } from '@/redux/store';
-
-// Get backend base URL from Vite environment variables with a fallback
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 // Isolated Performance Image Slider Component with rigid single viewport bounds
 function ProductImageSlider({ images, isSoldOut, altText, productId }) {
@@ -18,12 +15,8 @@ function ProductImageSlider({ images, isSoldOut, altText, productId }) {
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
     if (typeof imgStr !== 'string') return 'https://placehold.co/600x400?text=No+Image';
-    if (imgStr.startsWith('http')) return imgStr;
-    const normalizedPath = imgStr.replace(/\\/g, '/');
-    if (normalizedPath.startsWith('/uploads/')) {
-      return `${API_BASE_URL}${normalizedPath}`;
-    }
-    return `${API_BASE_URL}/${normalizedPath.replace(/^\//, '')}`;
+    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return imgStr;
+    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
   };
 
   useEffect(() => {
@@ -171,7 +164,7 @@ export default function CategoryGrid({
       setLoading(true);
       setErrorMsg('');
 
-      const response = await axios.get(`${API_BASE_URL}/api/v1/get-All-product`);
+      const response = await axiosInstance.get('/get-All-product');
 
       if (response.data && Array.isArray(response.data.products)) {
         setProducts(response.data.products);
@@ -209,8 +202,8 @@ export default function CategoryGrid({
     }
 
     try {
-      const { data } = await axios.post(
-        `${API_BASE_URL}/api/v1/add-to-cart`,
+      const { data } = await axiosInstance.post(
+        '/add-to-cart',
         { productId, quantity: 1 }
       );
       alert('Product added to cart successfully!');
@@ -488,10 +481,9 @@ export default function CategoryGrid({
                   const isSoldOut = product.stock <= 0;
 
                   return (
-                    <Link
+                    <div
                       key={`${id ?? 'product'}-${index}`}
                       className="text-gray-700 cursor-pointer flex flex-col group border border-gray-200/70 rounded-xl p-3.5 bg-white hover:shadow-md hover:border-gray-300/80 transition-all duration-300 relative"
-                      to={`/product-details/${id}`}
                     >
                       {/* Media Image Viewport */}
                       <div className="overflow-hidden bg-white rounded-lg aspect-square relative flex items-center justify-center group/image">
@@ -539,7 +531,9 @@ export default function CategoryGrid({
                       {/* Details */}
                       <div className="flex flex-col text-left mt-4 space-y-1">
                         <h3 className="text-xs sm:text-[13px] font-semibold text-gray-800 line-clamp-2 leading-tight group-hover:text-rose-800 transition-colors duration-150 min-h-[2.25rem]">
+                          <Link to={`/product-details/${id}`} className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-700">
                           {product.name}
+                          </Link>
                         </h3>
                         <div className="flex items-baseline gap-1.5 pt-1">
                           <span className="text-xs sm:text-sm font-extrabold text-red-600">
@@ -552,7 +546,7 @@ export default function CategoryGrid({
                           )}
                         </div>
                       </div>
-                    </Link>
+                    </div>
                   );
                 })}
               </div>

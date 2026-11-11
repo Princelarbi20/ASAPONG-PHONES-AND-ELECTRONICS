@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import axiosInstance, { API_ORIGIN } from '../../lib/axios';
-import { Loader2, AlertCircle } from 'lucide-react';
+import axiosInstance, { resolveApiAssetUrl } from '../../lib/axios';
+import { Loader2, AlertCircle, Search, ArrowDown, ArrowUp, RotateCcw } from 'lucide-react';
 import UpdateOrder from './UpdateOrder';
 import { formatPrice } from '@/lib/utils';
 import PaginationControls from '@/component/PaginationControls';
+import { StatusBadge } from './dashboard/ui';
 
 const PAGE_SIZE = 20;
+const SortButton = ({ field, sort, onToggle, children }) => (
+  <button type="button" onClick={() => onToggle(field)} className="inline-flex items-center gap-1 hover:text-indigo-600">
+    {children}{sort.by === field ? (sort.order === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />) : null}
+  </button>
+);
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
@@ -15,42 +21,60 @@ export default function Orders() {
   const [errorMsg, setErrorMsg] = useState('');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 0 });
-
-  // GET ALL ORDERS
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      setErrorMsg('');
-
-      const response = await axiosInstance.get('/get-all-orders', { params: { page, limit: PAGE_SIZE } });
-
-      // 3. Destructure and evaluate response shapes cleanly
-      if (response.data && Array.isArray(response.data.orders)) {
-        setOrders(response.data.orders);
-        setPagination(response.data.pagination || { total: response.data.totalOrders || response.data.orders.length, totalPages: 1 });
-      } else if (Array.isArray(response.data)) {
-        setOrders(response.data);
-        setPagination({ total: response.data.length, totalPages: 1 });
-      } else {
-        setOrders([]);
-      }
-    } catch (err) {
-      console.error('Error fetching orders:', err);
-      setErrorMsg(err.response?.data?.message || 'Access Denied: Unable to fetch order data.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [sort, setSort] = useState({ by: 'date', order: 'desc' });
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    fetchOrders();
-  }, [page]);
+    const timer = window.setTimeout(() => setSearch(searchInput.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    const fetchOrders = async () => {
+      setLoading(true);
+      setErrorMsg('');
+      try {
+        const { data } = await axiosInstance.get('/get-all-orders', {
+          params: { page, limit: PAGE_SIZE, search, status, paymentStatus, paymentMethod, dateFrom, dateTo, sortBy: sort.by, sortOrder: sort.order },
+          signal: controller.signal,
+        });
+        setOrders(Array.isArray(data.orders) ? data.orders : []);
+        setPagination(data.pagination || { total: data.totalOrders || 0, totalPages: 1 });
+        setPaymentMethods(data.paymentMethods || []);
+      } catch (err) {
+        if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') setErrorMsg(err.response?.data?.message || 'Unable to fetch order data.');
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+    fetchOrders();
+    return () => controller.abort();
+  }, [page, search, status, paymentStatus, paymentMethod, dateFrom, dateTo, sort, reloadKey]);
+
+  const setFilter = (setter) => (event) => { setter(event.target.value); setPage(1); };
+  const toggleSort = (by) => {
+    setSort((current) => ({ by, order: current.by === by && current.order === 'asc' ? 'desc' : 'asc' }));
+    setPage(1);
+  };
+  const clearFilters = () => {
+    setSearchInput(''); setSearch(''); setStatus(''); setPaymentStatus(''); setPaymentMethod('');
+    setDateFrom(''); setDateTo(''); setSort({ by: 'date', order: 'desc' }); setPage(1);
+  };
   const changeStatusInState = (id, nextVal) => {
     setOrders(orders.map(o => (o._id || o.id) === id ? { ...o, status: nextVal } : o));
     if (selectedOrder && (selectedOrder._id || selectedOrder.id) === id) {
       setSelectedOrder({ ...selectedOrder, status: nextVal });
     }
+    setReloadKey((current) => current + 1);
   };
 
   const handleSelectOrder = async (order) => {
@@ -86,12 +110,7 @@ export default function Orders() {
 
   const getImageUrl = (src) => {
     if (!src) return 'https://placehold.co/120x120?text=No+Image';
-    if (src.startsWith('http')) return src;
-    const normalizedPath = src.replace(/\\/g, '/');
-    if (normalizedPath.startsWith('/uploads/')) {
-      return `${API_ORIGIN}${normalizedPath}`;
-    }
-    return `${API_ORIGIN}/${normalizedPath.replace(/^\//, '')}`;
+    return resolveApiAssetUrl(src.replace(/\\/g, '/'));
   };
 
   return (
@@ -112,20 +131,34 @@ export default function Orders() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-          <table className="w-full text-left border-collapse">
+          <div className="grid grid-cols-1 gap-3 border-b border-gray-200 p-4 sm:grid-cols-2 xl:grid-cols-4">
+            <label className="relative sm:col-span-2 xl:col-span-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input type="search" value={searchInput} onChange={(event) => { setSearchInput(event.target.value); setPage(1); }} placeholder="Search order, customer, phone…" aria-label="Search orders" className="min-h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm dark:bg-slate-800" />
+            </label>
+            <select value={status} onChange={setFilter(setStatus)} aria-label="Filter order status" className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">All order statuses</option>{['PENDING','CONFIRMED','PROCESSING','PACKED','SHIPPED','OUT FOR DELIVERY','DELIVERED','CANCELLED','RETURN REQUESTED','RETURNED','REFUNDED'].map((value) => <option key={value}>{value}</option>)}</select>
+            <select value={paymentStatus} onChange={setFilter(setPaymentStatus)} aria-label="Filter payment status" className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">All payment statuses</option>{['PENDING','PAID','FAILED','ABANDONED','REVERSED'].map((value) => <option key={value}>{value}</option>)}</select>
+            <select value={paymentMethod} onChange={setFilter(setPaymentMethod)} aria-label="Filter payment method" className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">All payment methods</option>{paymentMethods.map((value) => <option key={value}>{value}</option>)}</select>
+            <label className="flex items-center gap-2 text-xs text-slate-500">From<input type="date" value={dateFrom} max={dateTo || undefined} onChange={setFilter(setDateFrom)} className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-2 text-sm" /></label>
+            <label className="flex items-center gap-2 text-xs text-slate-500">To<input type="date" value={dateTo} min={dateFrom || undefined} onChange={setFilter(setDateTo)} className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-2 text-sm" /></label>
+            <button type="button" onClick={clearFilters} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50"><RotateCcw className="h-4 w-4" />Clear filters</button>
+            <p className="flex min-h-10 items-center text-sm text-slate-500" aria-live="polite">{pagination.total} matching orders</p>
+          </div>
+          <div className="overflow-x-auto"><table className="admin-animated-table w-full min-w-[900px] text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                <th className="px-6 py-4">Order ID</th>
+                <th className="px-6 py-4"><SortButton field="id" sort={sort} onToggle={toggleSort}>Order ID</SortButton></th>
                 <th className="px-6 py-4">Customer</th>
-                <th className="px-6 py-4">Total Price</th>
-                <th className="px-6 py-4">Current Status</th>
+                <th className="px-6 py-4"><SortButton field="amount" sort={sort} onToggle={toggleSort}>Total Price</SortButton></th>
+                <th className="px-6 py-4"><SortButton field="status" sort={sort} onToggle={toggleSort}>Current Status</SortButton></th>
+                <th className="px-6 py-4"><SortButton field="date" sort={sort} onToggle={toggleSort}>Date</SortButton></th>
                 <th className="px-6 py-4 text-right">Update Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-gray-400">No active client orders found.</td>
+                  <td colSpan="6" className="px-6 py-8 text-center text-gray-400">No orders match your search or filters. Try changing them or clear filters.</td>
                 </tr>
               ) : (
                 orders.map((order) => {
@@ -146,15 +179,9 @@ export default function Orders() {
                       <td className="px-6 py-4 font-medium text-gray-900">{customer}</td>
                       <td className="px-6 py-4">{formatPrice(amount)}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${['SHIPPED', 'DELIVERED', 'APPROVED'].includes((order.status || 'PENDING').toUpperCase())
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : (order.status || 'PENDING').toUpperCase() === 'PENDING'
-                            ? 'bg-rose-50 text-rose-700'
-                            : 'bg-amber-50 text-amber-700'
-                          }`}>
-                          {order.status || 'PENDING'}
-                        </span>
+                        <StatusBadge status={order.status || 'PENDING'} />
                       </td>
+                      <td className="whitespace-nowrap px-6 py-4">{formatDate(order.createdAt)}</td>
                       <td className="px-6 py-4 text-right" onClick={(event) => event.stopPropagation()}>
                         <UpdateOrder
                           orderId={id}
@@ -168,6 +195,7 @@ export default function Orders() {
               )}
             </tbody>
           </table>
+          </div>
           <PaginationControls
             page={page}
             limit={PAGE_SIZE}
@@ -180,8 +208,8 @@ export default function Orders() {
       )}
 
       {detailsLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="status" aria-label="Loading order details">
-          <div className="flex items-center gap-3 rounded-2xl bg-white px-6 py-5 text-sm font-medium text-slate-700 shadow-xl">
+        <div className="admin-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="status" aria-label="Loading order details">
+          <div className="admin-modal-panel flex items-center gap-3 rounded-2xl bg-white px-6 py-5 text-sm font-medium text-slate-700 shadow-xl">
             <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
             Loading order details…
           </div>
@@ -189,8 +217,8 @@ export default function Orders() {
       )}
 
       {selectedOrder && !detailsLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4 sm:p-6">
-          <div className="w-full max-w-6xl overflow-y-auto rounded-[2rem] bg-white shadow-[0_32px_80px_rgba(15,23,42,0.18)] border border-slate-200 sm:max-h-[calc(100vh-4rem)]">
+        <div className="admin-modal-backdrop fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4 sm:p-6">
+          <div className="admin-modal-panel w-full max-w-6xl overflow-y-auto rounded-[2rem] bg-white shadow-[0_32px_80px_rgba(15,23,42,0.18)] border border-slate-200 sm:max-h-[calc(100vh-4rem)]">
             <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-7 sm:py-6">
               <div className="space-y-2">
                 <h3 className="text-2xl font-semibold text-slate-900">Order #{selectedOrder._id?.slice(0, 8) || selectedOrder.id?.slice(0, 8)}</h3>

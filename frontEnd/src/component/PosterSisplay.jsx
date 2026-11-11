@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/component/Button'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios'
 
 /* ---------- category helpers ---------- */
 
@@ -139,7 +139,7 @@ const PosterDisplay = ({ category = '' }) => {
         setLoading(true);
         setCurrentIndex(0);
 
-        const response = await axios.get('http://localhost:5000/api/v1/get-All-product');
+        const response = await axiosInstance.get('/get-All-product');
 
         let rawProductsList = [];
         if (response.data && Array.isArray(response.data.products)) {
@@ -179,8 +179,8 @@ const PosterDisplay = ({ category = '' }) => {
 
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
-    if (imgStr.startsWith('http')) return imgStr;
-    return `http://localhost:5000/${imgStr.replace(/\\/g, '/')}`;
+    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return imgStr;
+    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
   };
 
   const navigateToProductDetails = (device) => {

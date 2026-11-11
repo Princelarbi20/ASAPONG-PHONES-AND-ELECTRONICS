@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import axiosInstance from '../../lib/axios';
-import { Loader2, AlertCircle, X, Shield, Calendar, Mail, User, Phone, LogIn } from 'lucide-react';
+import { Loader2, AlertCircle, X, Shield, Calendar, Mail, User, Phone, LogIn, Search, ArrowDown, ArrowUp, RotateCcw } from 'lucide-react';
 import SuspendUser from './SuspendUser';
 import UnsuspendUser from './UnsuspendUser';
 import PaginationControls from '@/component/PaginationControls';
 
 const PAGE_SIZE = 20;
+const SortButton = ({ field, sort, onToggle, children }) => (
+  <button type="button" onClick={() => onToggle(field)} className="inline-flex items-center gap-1 hover:text-indigo-600">
+    {children}{sort.by === field ? (sort.order === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />) : null}
+  </button>
+);
 
 export default function Users() {
   const [users, setUsers] = useState([]);
@@ -14,41 +19,58 @@ export default function Users() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ total: 0, totalPages: 0 });
-
-  // GET ALL USERS WITH AUTHENTICATION
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      setErrorMsg('');
-
-      const response = await axiosInstance.get('/get-all-users', { params: { page, limit: PAGE_SIZE } });
-
-      if (response.data && Array.isArray(response.data.users)) {
-        setUsers(response.data.users);
-        setPagination(response.data.pagination || { total: response.data.totalUsers || response.data.users.length, totalPages: 1 });
-      } else if (Array.isArray(response.data)) {
-        setUsers(response.data);
-        setPagination({ total: response.data.length, totalPages: 1 });
-      } else {
-        setUsers([]);
-      }
-    } catch (err) {
-      console.error('Error fetching users:', err);
-      setErrorMsg(err.response?.data?.message || 'Access Denied: Unable to fetch data.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [role, setRole] = useState('');
+  const [accountStatus, setAccountStatus] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [sort, setSort] = useState({ by: 'date', order: 'desc' });
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    fetchUsers();
-  }, [page]);
+    const timer = window.setTimeout(() => setSearch(searchInput.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    const fetchUsers = async () => {
+      setLoading(true);
+      setErrorMsg('');
+      try {
+        const { data } = await axiosInstance.get('/get-all-users', {
+          params: { page, limit: PAGE_SIZE, search, role, accountStatus, dateFrom, dateTo, sortBy: sort.by, sortOrder: sort.order },
+          signal: controller.signal,
+        });
+        setUsers(Array.isArray(data.users) ? data.users : []);
+        setPagination(data.pagination || { total: data.totalUsers || 0, totalPages: 1 });
+      } catch (err) {
+        if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED') setErrorMsg(err.response?.data?.message || 'Unable to fetch users.');
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+    fetchUsers();
+    return () => controller.abort();
+  }, [page, search, role, accountStatus, dateFrom, dateTo, sort, reloadKey]);
+
+  const setFilter = (setter) => (event) => { setter(event.target.value); setPage(1); };
+  const toggleSort = (by) => {
+    setSort((current) => ({ by, order: current.by === by && current.order === 'asc' ? 'desc' : 'asc' }));
+    setPage(1);
+  };
+  const clearFilters = () => {
+    setSearchInput(''); setSearch(''); setRole(''); setAccountStatus(''); setDateFrom(''); setDateTo('');
+    setSort({ by: 'date', order: 'desc' }); setPage(1);
+  };
   const changeStatusInState = (id, newStatus) => {
-    setUsers(users.map(u => (u._id || u.id) === id ? { ...u, status: newStatus } : u));
+    const isSuspended = newStatus === 'Suspended';
+    setUsers(users.map(u => (u._id || u.id) === id ? { ...u, isSuspended, status: newStatus } : u));
     if (selectedUser && (selectedUser._id || selectedUser.id) === id) {
-      setSelectedUser({ ...selectedUser, status: newStatus });
+      setSelectedUser({ ...selectedUser, isSuspended, status: newStatus });
     }
+    setReloadKey((current) => current + 1);
   };
 
   // Helper function to format dates uniformly
@@ -82,19 +104,34 @@ export default function Users() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-          <table className="w-full text-left border-collapse">
+          <div className="grid grid-cols-1 gap-3 border-b border-gray-200 p-4 sm:grid-cols-2 xl:grid-cols-4">
+            <label className="relative sm:col-span-2 xl:col-span-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input type="search" value={searchInput} onChange={(event) => { setSearchInput(event.target.value); setPage(1); }} placeholder="Search name, email, phone, ID…" aria-label="Search users" className="min-h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm" />
+            </label>
+            <select value={role} onChange={setFilter(setRole)} aria-label="Filter user role" className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">All roles</option>{['USER', 'ADMIN', 'DEALER'].map((value) => <option key={value}>{value}</option>)}</select>
+            <select value={accountStatus} onChange={setFilter(setAccountStatus)} aria-label="Filter account status" className="min-h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">All account statuses</option><option value="active">Active</option><option value="inactive">Inactive (suspended)</option></select>
+            <label className="flex items-center gap-2 text-xs text-slate-500">From<input type="date" value={dateFrom} max={dateTo || undefined} onChange={setFilter(setDateFrom)} className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-2 text-sm" /></label>
+            <label className="flex items-center gap-2 text-xs text-slate-500">To<input type="date" value={dateTo} min={dateFrom || undefined} onChange={setFilter(setDateTo)} className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-2 text-sm" /></label>
+            <button type="button" onClick={clearFilters} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-600 hover:bg-slate-50"><RotateCcw className="h-4 w-4" />Clear filters</button>
+            <p className="flex min-h-10 items-center text-sm text-slate-500" aria-live="polite">{pagination.total} matching users</p>
+          </div>
+          <div className="overflow-x-auto"><table className="admin-animated-table w-full min-w-[850px] text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                <th className="px-6 py-4">Username</th>
-                <th className="px-6 py-4">Email Address</th>
-                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4"><SortButton field="name" sort={sort} onToggle={toggleSort}>Username</SortButton></th>
+                <th className="px-6 py-4"><SortButton field="email" sort={sort} onToggle={toggleSort}>Email Address</SortButton></th>
+                <th className="px-6 py-4">Phone</th>
+                <th className="px-6 py-4"><SortButton field="role" sort={sort} onToggle={toggleSort}>Role</SortButton></th>
+                <th className="px-6 py-4"><SortButton field="status" sort={sort} onToggle={toggleSort}>Status</SortButton></th>
+                <th className="px-6 py-4"><SortButton field="date" sort={sort} onToggle={toggleSort}>Registered</SortButton></th>
                 <th className="px-6 py-4 text-right">Moderation Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 text-sm text-gray-700">
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="px-6 py-8 text-center text-gray-400">No users found.</td>
+                  <td colSpan="7" className="px-6 py-8 text-center text-gray-400">No users match your search or filters. Try changing them or clear filters.</td>
                 </tr>
               ) : (
                 users.map((user) => {
@@ -109,12 +146,15 @@ export default function Users() {
                     >
                       <td className="px-6 py-4 font-medium text-gray-900">{displayName}</td>
                       <td className="px-6 py-4 text-gray-500">{user.email}</td>
+                      <td className="px-6 py-4 text-gray-500">{user.phone || '—'}</td>
+                      <td className="px-6 py-4">{user.role || 'USER'}</td>
                       <td className="px-6 py-4">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${user.status === 'Active' || !user.isSuspended ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
                           }`}>
                           {user.status || (user.isSuspended ? 'Suspended' : 'Active')}
                         </span>
                       </td>
+                      <td className="whitespace-nowrap px-6 py-4">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</td>
                       <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                         {(user.status === 'Active' || !user.isSuspended) ? (
                           <SuspendUser userId={id} onSuspended={() => changeStatusInState(id, 'Suspended')} />
@@ -128,6 +168,7 @@ export default function Users() {
               )}
             </tbody>
           </table>
+          </div>
           <PaginationControls
             page={page}
             limit={PAGE_SIZE}
@@ -141,8 +182,8 @@ export default function Users() {
 
       {/* USER DETAILS POPUP MODAL */}
       {selectedUser && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative animate-in fade-in zoom-in-95 duration-150">
+        <div className="admin-modal-backdrop fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+          <div className="admin-modal-panel bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative animate-in fade-in zoom-in-95 duration-150">
 
             {/* Close Button */}
             <button

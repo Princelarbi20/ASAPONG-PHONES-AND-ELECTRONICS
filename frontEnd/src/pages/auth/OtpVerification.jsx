@@ -1,10 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axiosInstance from '../../lib/axios';
 import toast from 'react-hot-toast';
 import { withCsrf } from '../../lib/csrf';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 const OtpVerification = () => {
   const OTP_LENGTH = 6;
@@ -44,7 +43,7 @@ const OtpVerification = () => {
 
   const handleChange = (e, index) => {
     const value = e.target.value;
-    if (isNaN(value)) return;
+    if (!/^\d*$/.test(value)) return;
 
     const newOtp = [...otp];
     newOtp[index] = value.substring(value.length - 1);
@@ -90,11 +89,7 @@ const OtpVerification = () => {
     setIsLoading(true);
     try {
       const config = await withCsrf({ withCredentials: true });
-      const response = await axios.post(
-        `${API_BASE_URL}/api/v1/verify-otp`,
-        { email, otp: finalOtp },
-        config
-      );
+      const response = await axiosInstance.post('/verify-otp', { email, otp: finalOtp }, config);
 
       if (response.data.success) {
         toast.success('✓ Email verified successfully!');
@@ -128,11 +123,7 @@ const OtpVerification = () => {
     setIsResending(true);
     try {
       const config = await withCsrf({ withCredentials: true });
-      const response = await axios.post(
-        `${API_BASE_URL}/api/v1/resend-otp`,
-        { email },
-        config
-      );
+      const response = await axiosInstance.post('/resend-otp', { email }, config);
       
       toast.success('OTP has been resent to your email');
       setOtp(new Array(OTP_LENGTH).fill(''));

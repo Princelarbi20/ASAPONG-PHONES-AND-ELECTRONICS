@@ -63,8 +63,8 @@ const Transactions = () => {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">Payment transactions</h2>
-        <p className="mt-1 text-sm text-slate-500">Search and review payment attempts recorded by the payment gateway.</p>
+        <h2 className="text-lg font-semibold tracking-tight text-slate-900 sm:text-xl">Payment transactions</h2>
+        <p className="mt-1 text-xs text-slate-500 sm:text-sm">Search and review payment attempts recorded by the payment gateway.</p>
       </div>
 
       <Card bodyClassName="p-0">
@@ -77,14 +77,14 @@ const Transactions = () => {
               onChange={updateFilter(setSearch)}
               placeholder="Search customer, order or reference"
               aria-label="Search transactions"
-              className="min-h-11 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              className="min-h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:text-sm"
             />
           </label>
-          <select value={status} onChange={updateFilter(setStatus)} aria-label="Filter by status" className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-indigo-400">
+          <select value={status} onChange={updateFilter(setStatus)} aria-label="Filter by status" className="min-h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-indigo-400 sm:w-auto sm:text-sm">
             <option value="">All statuses</option>
             {STATUS_OPTIONS.map((value) => <option key={value} value={value}>{humanize(value)}</option>)}
           </select>
-          <select value={method} onChange={updateFilter(setMethod)} aria-label="Filter by payment method" className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-indigo-400">
+          <select value={method} onChange={updateFilter(setMethod)} aria-label="Filter by payment method" className="min-h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-indigo-400 sm:w-auto sm:text-sm">
             <option value="">All methods</option>
             {methods.map((value) => <option key={value} value={value}>{humanize(value)}</option>)}
           </select>
@@ -99,47 +99,69 @@ const Transactions = () => {
         ) : transactions.length === 0 ? (
           <EmptyState icon={CreditCard} title="No transactions found" message="Payment attempts will appear here once customers start checkout." />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                  {['Transaction ID', 'Customer', 'Order ID', 'Amount', 'Method', 'Gateway', 'Date', 'Status'].map((heading) => (
-                    <th key={heading} scope="col" className="whitespace-nowrap px-4 py-3 font-medium">{heading}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {transactions.map((transaction) => (
-                  <tr key={transaction._id} className="hover:bg-slate-50/70">
-                    <td className="max-w-56 px-4 py-3">
-                      <p className="truncate font-medium text-slate-900">{transaction.transactionId || transaction.reference}</p>
-                      {transaction.transactionId && <p className="mt-0.5 truncate text-xs text-slate-500">Ref: {transaction.reference}</p>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-800">{transaction.user?.userName || 'Unknown customer'}</p>
-                      <p className="text-xs text-slate-500">{transaction.user?.email || ''}</p>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-slate-700">{transaction.order?.orderNumber ? `#${transaction.order.orderNumber}` : transaction.order?._id?.slice(-8) || 'N/A'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-900">{money(transaction.amount)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-slate-700">{transaction.serviceProvider ? `${transaction.serviceProvider} Mobile Money` : humanize(transaction.paymentMethod) || 'N/A'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-slate-700">{transaction.provider || 'N/A'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-slate-500">{formatDateTime(transaction.createdAt) || 'N/A'}</td>
-                    <td className="px-4 py-3"><Badge tone={statusTone(transaction.status)}>{humanize(transaction.status)}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-2.5 p-3 sm:space-y-3 sm:p-4">
+            {transactions.map((transaction) => {
+              const transactionId = transaction.transactionId || transaction.reference || 'N/A'
+              const orderId = transaction.order?.orderNumber
+                ? `#${transaction.order.orderNumber}`
+                : transaction.order?._id?.slice(-8) || 'N/A'
+
+              return (
+                <article key={transaction._id} className="min-w-0 rounded-lg border border-slate-200 bg-white p-3 sm:p-3.5">
+                  <div className="flex min-w-0 items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Transaction ID</p>
+                      <p className="mt-0.5 break-all text-xs font-semibold leading-4 text-slate-900 sm:text-sm">{transactionId}</p>
+                      {transaction.transactionId && transaction.reference && (
+                        <p className="mt-0.5 break-all text-[10px] leading-4 text-slate-500 sm:text-xs">Ref: {transaction.reference}</p>
+                      )}
+                    </div>
+                    <Badge tone={statusTone(transaction.status)} className="shrink-0 text-[10px] sm:text-xs">
+                      {humanize(transaction.status)}
+                    </Badge>
+                  </div>
+
+                  <dl className="mt-2.5 grid min-w-0 grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-6">
+                    <div className="min-w-0">
+                      <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Customer</dt>
+                      <dd className="mt-0.5 break-words text-xs font-medium leading-4 text-slate-800">{transaction.user?.userName || 'Unknown customer'}</dd>
+                      <dd className="break-all text-[10px] leading-4 text-slate-500 sm:text-xs">{transaction.user?.email || 'No email'}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Order ID</dt>
+                      <dd className="mt-0.5 break-all text-xs leading-4 text-slate-700">{orderId}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Amount</dt>
+                      <dd className="mt-0.5 break-words text-xs font-semibold leading-4 text-slate-900">{money(transaction.amount)}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Method</dt>
+                      <dd className="mt-0.5 break-words text-xs leading-4 text-slate-700">{transaction.serviceProvider ? `${transaction.serviceProvider} Mobile Money` : humanize(transaction.paymentMethod) || 'N/A'}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Gateway</dt>
+                      <dd className="mt-0.5 break-words text-xs leading-4 text-slate-700">{transaction.provider || 'N/A'}</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Date</dt>
+                      <dd className="mt-0.5 break-words text-xs leading-4 text-slate-500">{formatDateTime(transaction.createdAt) || 'N/A'}</dd>
+                    </div>
+                  </dl>
+                </article>
+              )
+            })}
           </div>
         )}
 
         {!error && !loading && (
-          <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-t border-slate-200 px-3 py-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:text-sm">
             <span>Showing {firstItem}-{lastItem} of {pagination.total}</span>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-slate-200 px-3 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"><ChevronLeft className="h-4 w-4" />Previous</button>
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-10 sm:px-3 sm:text-sm"><ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />Previous</button>
               <span className="px-1">Page {page} of {Math.max(1, pagination.totalPages)}</span>
-              <button type="button" onClick={() => setPage((current) => current + 1)} disabled={page >= pagination.totalPages} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-slate-200 px-3 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Next<ChevronRight className="h-4 w-4" /></button>
-              <button type="button" onClick={() => setReloadKey((current) => current + 1)} aria-label="Refresh transactions" className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 hover:bg-slate-50"><RefreshCw className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setPage((current) => current + 1)} disabled={page >= pagination.totalPages} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-10 sm:px-3 sm:text-sm">Next<ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></button>
+              <button type="button" onClick={() => setReloadKey((current) => current + 1)} aria-label="Refresh transactions" className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 hover:bg-slate-50 sm:h-10 sm:w-10"><RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></button>
             </div>
           </div>
         )}

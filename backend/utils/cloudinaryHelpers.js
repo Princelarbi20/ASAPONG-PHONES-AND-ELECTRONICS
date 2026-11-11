@@ -1,6 +1,6 @@
 import { v2 as cloudinary } from "cloudinary";
 
-const cloudinaryConfigured = Boolean(
+const cloudinaryConfigured = process.env.NODE_ENV !== 'test' && Boolean(
   process.env.CLOUDINARY_NAME &&
   process.env.CLOUDINARY_API_KEY &&
   process.env.CLOUDINARY_API_SECRET

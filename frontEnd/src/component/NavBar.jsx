@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, Link, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import axios from 'axios';
+import axiosInstance from '@/lib/axios';
 import { authAction } from "../redux/store";
 import Logo from "./Logo";
 import { Button } from "./Button";
@@ -11,8 +11,6 @@ import {
   Smartphone, Laptop, Tv, Speaker, Cable, Snowflake, Disc,
   Package, LayoutDashboard, Settings, UserCheck, Heart, HelpCircle
 } from "lucide-react";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 const Navbar = ({ globalSearchQuery, setGlobalSearchQuery }) => {
   const [isVisible, setIsvisible] = useState(false);
@@ -111,7 +109,7 @@ const Navbar = ({ globalSearchQuery, setGlobalSearchQuery }) => {
   useEffect(() => {
     const fetchAllProducts = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/v1/get-All-product`);
+        const response = await axiosInstance.get('/get-All-product');
         const products = response.data?.products || response.data || [];
         setAllProducts(Array.isArray(products) ? products : []);
       } catch (err) {
@@ -202,9 +200,9 @@ const Navbar = ({ globalSearchQuery, setGlobalSearchQuery }) => {
 
         {/* DESKTOP NAVIGATION LINKS */}
         <ul className="hidden xl:flex gap-6 font-semibold text-sm text-gray-700">
-          <li><NavLink to="/" className={({ isActive }) => isActive ? "text-red-600" : "hover:text-red-400 transition"}>Home</NavLink></li>
-          <li><NavLink to="/about" className={({ isActive }) => isActive ? "text-red-600" : "hover:text-red-400 transition"}>About</NavLink></li>
-          <li><NavLink to="/shops" className={({ isActive }) => isActive ? "text-red-600" : "hover:text-red-400 transition"}>Shops</NavLink></li>
+          <li><NavLink to="/" className={({ isActive }) => isActive ? "text-red-700" : "hover:text-red-700 transition"}>Home</NavLink></li>
+          <li><NavLink to="/about" className={({ isActive }) => isActive ? "text-red-700" : "hover:text-red-700 transition"}>About</NavLink></li>
+          <li><NavLink to="/shops" className={({ isActive }) => isActive ? "text-red-700" : "hover:text-red-700 transition"}>Shops</NavLink></li>
         </ul>
 
         {/* ACTIONS LAYER CONTAINER */}
@@ -216,7 +214,7 @@ const Navbar = ({ globalSearchQuery, setGlobalSearchQuery }) => {
             Categories
           </Button>
 
-          <Link to="/cart" className="relative p-2.5 text-gray-600 hover:text-red-600 hover:bg-red-100 rounded-full transition-all group">
+          <Link to="/cart" aria-label="Shopping cart" className="relative p-2.5 text-gray-600 hover:text-red-600 hover:bg-red-100 rounded-full transition-all group">
             <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 md:w-5 md:h-5" />
             {cartItemCount > 0 && (
               <span className="absolute top-0 right-0 md:-top-1 md:-right-1 bg-white text-red-600 font-extrabold text-[9px] md:text-[10px] w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
@@ -237,7 +235,7 @@ const Navbar = ({ globalSearchQuery, setGlobalSearchQuery }) => {
           ) : (
             <Link
               to="/auth/login"
-              className="hidden md:block bg-red-400 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-red-500 transition shadow-sm"
+              className="hidden md:block bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-red-800 transition shadow-sm"
             >
               Sign In
             </Link>

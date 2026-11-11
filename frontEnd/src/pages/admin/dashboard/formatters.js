@@ -1,5 +1,5 @@
 import { formatPrice } from "@/lib/utils";
-import { API_BASE } from "./dashboardApi";
+import { resolveApiAssetUrl } from "@/lib/axios";
 
 // Currency uses the same formatPrice helper as the rest of the store.
 export const money = (value) => formatPrice(Number(value) || 0);
@@ -58,7 +58,40 @@ export const humanize = (value) =>
     .replace(/_/g, " ")
     .replace(/^\w/, (c) => c.toUpperCase());
 
-// Colour family for an order / payment status. Unknown statuses stay neutral.
+export const ORDER_STATUSES = [
+  "PENDING",
+  "CONFIRMED",
+  "PROCESSING",
+  "PACKED",
+  "SHIPPED",
+  "OUT FOR DELIVERY",
+  "DELIVERED",
+  "CANCELLED",
+  "RETURN REQUESTED",
+  "RETURNED",
+  "REFUNDED",
+];
+
+// Shared order-status palette for chart slices and status badges.
+export const ORDER_STATUS_COLORS = {
+  PENDING: "#f59e0b",
+  CONFIRMED: "#8b5cf6",
+  PROCESSING: "#3b82f6",
+  PACKED: "#6366f1",
+  SHIPPED: "#06b6d4",
+  "OUT FOR DELIVERY": "#14b8a6",
+  DELIVERED: "#22c55e",
+  CANCELLED: "#ef4444",
+  "RETURN REQUESTED": "#ec4899",
+  RETURNED: "#ca8a04",
+  REFUNDED: "#6b7280",
+};
+
+const normalizeStatus = (status) => String(status ?? "").trim().toUpperCase().replace(/_/g, " ");
+export const getOrderStatusColor = (status) => ORDER_STATUS_COLORS[normalizeStatus(status)] || "#94a3b8";
+export const isOrderStatus = (status) => Object.hasOwn(ORDER_STATUS_COLORS, normalizeStatus(status));
+
+// Colour family for payment statuses and other status groups. Unknown statuses stay neutral.
 export const getStatusTone = (status) => {
   const key = String(status ?? "").toUpperCase();
   if (["PAID", "SUCCESS", "SUCCESSFUL", "COMPLETED", "DELIVERED"].includes(key))
@@ -74,5 +107,5 @@ export const getStatusTone = (status) => {
 export const resolveImageUrl = (img) => {
   if (!img) return "";
   if (/^https?:\/\//.test(img)) return img;
-  return `${API_BASE}/${String(img).replace(/\\/g, "/")}`;
+  return resolveApiAssetUrl(String(img).replace(/\\/g, "/"));
 };

@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, ArrowLeft, Loader2, Calendar, Package, MapPin, CheckCircle, Clock, XCircle, CreditCard, RotateCcw } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
-import axiosInstance, { API_ORIGIN } from '../../lib/axios';
+import axiosInstance, { resolveApiAssetUrl } from '../../lib/axios';
 import toast from 'react-hot-toast';
 import { authAction } from '../../redux/store';
 
@@ -23,8 +23,7 @@ export const MyOrders = () => {
     // URL parsing helper to match dynamic asset locations
     const getSingleImageUrl = (imgStr) => {
         if (!imgStr) return 'https://placehold.co/150?text=No+Image';
-        if (imgStr.startsWith('http')) return imgStr;
-        return `${API_ORIGIN}/${imgStr.replace(/\\/g, '/')}`;
+        return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
     };
 
     // Fulfilment status colours

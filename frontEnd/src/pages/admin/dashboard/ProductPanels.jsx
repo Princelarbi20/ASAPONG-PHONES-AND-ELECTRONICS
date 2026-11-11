@@ -113,7 +113,10 @@ const Tile = ({ label, value, tone }) => {
 
 // stats.products totals + byCategory
 export const InventoryCard = ({ products }) => {
-  const categories = (products?.byCategory ?? []).slice(0, 6)
+  const categories = [...(products?.byCategory ?? [])]
+    .sort((a, b) => (Number(b.count) - Number(a.count)) || String(a.category).localeCompare(String(b.category)))
+    .slice(0, 6)
+  const maxCategoryCount = Math.max(...categories.map(({ count }) => Number(count) || 0), 0)
   const total = products?.total ?? 0
 
   return (
@@ -130,17 +133,17 @@ export const InventoryCard = ({ products }) => {
         {categories.length === 0 ? (
           <EmptyState icon={Boxes} title="No categories yet" />
         ) : (
-          <ul className="mt-3 space-y-3">
+          <ul className="admin-category-list mt-3 space-y-3">
             {categories.map(({ category, count }) => (
               <li key={category}>
                 <div className="flex items-center justify-between text-sm">
                   <span className="truncate text-slate-700">{category}</span>
                   <span className="ml-2 shrink-0 font-medium text-slate-900">{number(count)}</span>
                 </div>
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="admin-category-track mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
                   <div
-                    className="h-full rounded-full bg-slate-700"
-                    style={{ width: `${total > 0 ? (count / total) * 100 : 0}%` }}
+                    className="admin-category-bar h-full rounded-full"
+                    style={{ '--category-width': `${maxCategoryCount > 0 ? ((Number(count) || 0) / maxCategoryCount) * 100 : 0}%` }}
                   />
                 </div>
               </li>

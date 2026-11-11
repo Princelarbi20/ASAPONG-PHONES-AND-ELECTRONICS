@@ -19,7 +19,7 @@ export const addProductDealerController = async (req, res, next) => {
     }
 
     // 1. Bring this validation back! It helps catch empty fields BEFORE Mongoose crashes
-    if (!name || !description || !price || !category || !stock || !brand) {
+    if (!name || !description || price === undefined || price === null || price === "" || !category || stock === undefined || stock === null || stock === "" || !brand) {
       return res.status(400).json({
         success: false,
         message: "All product details (name, description, price, category, stock, brand) are required.",

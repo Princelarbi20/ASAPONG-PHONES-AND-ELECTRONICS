@@ -1,13 +1,12 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import axiosInstance from '../../lib/axios'
 import toast from 'react-hot-toast'
 import CommonForms from './ComonForms' // Casing preserved exactly as requested
 import { registerFormController } from '../../Data/Data'
 import ShopName from '@/component/ShopName'
 import { withCsrf } from '../../lib/csrf'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 const initialState = { userName: '', email: '', password: '', phone: '' }
 
@@ -20,21 +19,16 @@ const Register = () => {
     e.preventDefault()
     setIsLoading(true)
 
-    // DEBUG LOG: Track data payloads cleanly before sending
-    console.log("Submit triggered. Frontend Payload data:", formData)
-
     try {
       // 🚀 withCredentials guarantees cookies are accepted and stored automatically by the browser
       const config = await withCsrf({ withCredentials: true })
-      const response = await axios.post(`${API_BASE_URL}/api/v1/user-register`, formData, config)
+      const response = await axiosInstance.post('/user-register', formData, config)
       const { user, otpExpiresAt } = response.data
 
       toast.success('Account created! Please verify your OTP.')
       // Navigate to OTP verification page with email in state
       navigate('/auth/otp-verify', { state: { email: user.email, otpExpiresAt } })
     } catch (error) {
-      console.error("Full Registration Catch Error Object:", error)
-
       const serverMessage = error.response?.data?.message;
       const statusText = error.response?.statusText;
       const statusCode = error.response?.status;

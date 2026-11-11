@@ -1,24 +1,35 @@
 import { open, unlink } from 'node:fs/promises';
-
-const isImage = (buffer) =>
-  buffer.subarray(0, 3).equals(Buffer.from([0xFF, 0xD8, 0xFF])) ||
-  buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) ||
-  (buffer.subarray(0, 4).equals(Buffer.from('RIFF')) && buffer.subarray(8, 12).equals(Buffer.from('WEBP')));
-
-const isPdf = (buffer) => buffer.subarray(0, 5).equals(Buffer.from('%PDF-'));
+import { v2 as cloudinary } from 'cloudinary';
+import { hasImageSignature, hasPdfSignature } from '../utils/fileSignatures.js';
 
 const removeFiles = async (files) => Promise.all(
   files.map((file) => unlink(file.path).catch(() => undefined))
 );
 
+export const cleanupUploadedFiles = async (files = []) => Promise.all(files.map(async (file) => {
+  if (/^https?:\/\//i.test(file?.path || '') && file?.filename) {
+    await new Promise((resolve) => {
+      try {
+        cloudinary.uploader.destroy(file.filename, { invalidate: true }, () => resolve());
+      } catch {
+        resolve();
+      }
+    });
+    return;
+  }
+  if (file?.path) await unlink(file.path).catch(() => undefined);
+}));
+
 const isLocalFilePath = (filePath) => {
-  if (!filePath) return false;
+  if (typeof filePath !== 'string' || !filePath) return false;
+  if (/^https?:\/\//i.test(filePath)) return false;
+  if (/^[a-z]:[\\/]/i.test(filePath)) return true;
 
   try {
     const parsed = new URL(filePath);
     return parsed.protocol === 'file:';
   } catch {
-    return !/^https?:\/\//i.test(filePath);
+    return true;
   }
 };
 
@@ -36,7 +47,7 @@ const validate = (type) => async (req, res, next) => {
       const header = Buffer.alloc(12);
       await handle.read(header, 0, header.length, 0);
       await handle.close();
-      const isValid = type === 'image' ? isImage(header) : isPdf(header);
+      const isValid = type === 'image' ? hasImageSignature(header) : hasPdfSignature(header);
       if (!isValid) {
         await removeFiles(files);
         const error = new Error(`Invalid ${type} file content.`);

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { Product } from '../../modules/productSchema.js';
 import { Orders } from '../../modules/orderSchema.js';
 import { Counter } from '../../modules/counterSchema.js';
+import { sendCashOnDeliveryOrderEmail } from '../../utils/orderEmail.js';
 
 const fail = (statusCode, message) => {
   const error = new Error(message);
@@ -40,7 +41,10 @@ const populateOrder = (orderId) =>
 export const createOrderController = async (req, res, next) => {
   const session = await mongoose.startSession();
   try {
-    const { shippingAddress } = req.body;
+    const { shippingAddress, paymentMethod = 'ONLINE' } = req.body;
+    if (!['COD', 'ONLINE'].includes(paymentMethod)) {
+      return res.status(400).json({ success: false, message: 'Invalid payment method.' });
+    }
     if (!shippingAddress || !['address', 'city', 'state', 'country', 'postalCode'].every((field) => shippingAddress[field])) {
       return res.status(400).json({ success: false, message: 'A complete shipping address is required.' });
     }
@@ -137,11 +141,24 @@ export const createOrderController = async (req, res, next) => {
 
     const order = await populateOrder(orderId);
 
+    let emailSent = null;
+    if (!reusedExisting && paymentMethod === 'COD') {
+      try {
+        const emailResult = await sendCashOnDeliveryOrderEmail(orderId);
+        emailSent = Boolean(emailResult?.success);
+        if (!emailSent) console.error('Cash-on-delivery order email was not sent:', emailResult?.error || 'Unknown mailer error');
+      } catch (emailError) {
+        emailSent = false;
+        console.error('Failed to send cash-on-delivery order email:', emailError);
+      }
+    }
+
     return res.status(reusedExisting ? 200 : 201).json({
       success: true,
       message: reusedExisting
         ? 'Existing unpaid order returned. Proceed to payment.'
-        : 'Order created. Proceed to payment.',
+        : paymentMethod === 'COD' ? 'Order placed with Cash on Delivery.' : 'Order created. Proceed to payment.',
+      emailSent,
       order,
     });
   } catch (error) {

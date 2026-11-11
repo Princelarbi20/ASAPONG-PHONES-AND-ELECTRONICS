@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/component/Button'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios'
 
 /* ---------- category helpers ---------- */
 
@@ -13,8 +13,6 @@ const getCategoryName = (category) => {
   if (typeof category === 'string') return category;
   return category.name || category.title || '';
 };
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ""
 
 const matchesCategory = (product, category) => {
   const wanted = normalize(category);
@@ -141,8 +139,7 @@ const PosterDisplay = ({ category = '' }) => {
         setLoading(true);
         setCurrentIndex(0);
 
-        // Fixed: Use API_BASE instead of hardcoded localhost
-        const response = await axios.get(`${API_BASE}/api/v1/get-All-product`);
+        const response = await axiosInstance.get('/get-All-product');
 
         let rawProductsList = [];
         if (response.data && Array.isArray(response.data.products)) {
@@ -182,9 +179,8 @@ const PosterDisplay = ({ category = '' }) => {
 
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
-    if (imgStr.startsWith('http')) return imgStr;
-    // Fixed: Use API_BASE template literal
-    return `${API_BASE}/${imgStr.replace(/\\/g, '/')}`;
+    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return imgStr;
+    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
   };
 
   const navigateToProductDetails = (device) => {

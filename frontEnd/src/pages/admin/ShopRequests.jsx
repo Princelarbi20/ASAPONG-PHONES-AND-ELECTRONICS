@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axiosInstance from '../../lib/axios';
+import axiosInstance, { resolveApiAssetUrl } from '../../lib/axios';
 import { X, Store, Mail, Phone, FileText, ShieldCheck, AlertCircle } from 'lucide-react';
 
 const ShopRequests = () => {
@@ -91,7 +91,7 @@ const ShopRequests = () => {
         } else if (!cleanPath.startsWith('/uploads/')) {
             cleanPath = '/uploads/certificates/' + cleanPath;
         }
-        return `${API_BASE_URL}${cleanPath}`;
+        return resolveApiAssetUrl(cleanPath);
     };
 
     if (loading) {

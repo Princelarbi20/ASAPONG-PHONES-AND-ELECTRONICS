@@ -241,7 +241,15 @@ export default function AddProduct({ onClose, onRefresh, productToEdit }) {
 
   const handleFileChange = (e) => {
     if (e.target.files) {
-      setSelectedImages(Array.from(e.target.files));
+      const files = Array.from(e.target.files);
+      const maxFiles = isEditMode ? 6 : 16;
+      if (files.length > maxFiles || files.some((file) => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+        setErrorMsg(`Choose up to ${maxFiles} JPEG, PNG, or WebP images (5 MB maximum each).`);
+        e.target.value = '';
+        return;
+      }
+      setErrorMsg('');
+      setSelectedImages(files);
     }
   };
 
@@ -360,6 +368,7 @@ export default function AddProduct({ onClose, onRefresh, productToEdit }) {
                 type="text"
                 name="name"
                 required
+                maxLength={120}
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="e.g. Samsung Galaxy S25 Ultra"
@@ -405,6 +414,7 @@ export default function AddProduct({ onClose, onRefresh, productToEdit }) {
                   name="price"
                   required
                   min="0"
+                  max="100000000"
                   step="1"
                   value={formData.price}
                   onChange={handleChange}
@@ -420,6 +430,8 @@ export default function AddProduct({ onClose, onRefresh, productToEdit }) {
                   name="stock"
                   required
                   min="0"
+                  max="1000000"
+                  step="1"
                   value={formData.stock}
                   onChange={handleChange}
                   placeholder="0"
@@ -465,6 +477,7 @@ export default function AddProduct({ onClose, onRefresh, productToEdit }) {
                 name="description"
                 rows="3"
                 required
+                maxLength={5000}
                 value={formData.description}
                 onChange={handleChange}
                 placeholder="Detailed hardware summary or feature highlights..."
@@ -507,6 +520,7 @@ export default function AddProduct({ onClose, onRefresh, productToEdit }) {
               <span className="text-[10px] text-slate-500 mt-0.5">Supports PNG, JPG, WEBP (Multiple allowed)</span>
               <input
                 type="file"
+                accept="image/jpeg,image/png,image/webp"
                 multiple
                 accept="image/*"
                 onChange={handleFileChange}

@@ -1,16 +1,13 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
-import axios from "axios";
+import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios';
 import { formatPrice } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ""
-
 const getSingleImageUrl = (imgStr) => {
   if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
-  if (imgStr.startsWith('http')) return imgStr;
-  return `${API_BASE}/${imgStr.replace(/\\/g, '/')}`;
+  return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
 };
 
 // Inner Staggered Image Slider Component for Card Images
@@ -133,7 +130,7 @@ const TITLE_THEMES = [
     accentExtra: "",
     band: "via-indigo-100/60",
     bar: "h-1 w-16 rounded-full bg-gradient-to-r from-indigo-600 to-sky-400",
-    button: "border-indigo-700 bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-300",
+    button: "border-indigo-800 bg-indigo-700 hover:bg-indigo-800 focus:ring-indigo-300",
   },
   { // 2 - emerald, editorial serif
     font: "pl-font-playfair",
@@ -143,7 +140,7 @@ const TITLE_THEMES = [
     accentExtra: "italic",
     band: "via-emerald-100/60",
     bar: "h-px w-20 bg-gradient-to-r from-transparent via-emerald-600 to-transparent",
-    button: "border-emerald-700 bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-300",
+    button: "border-emerald-800 bg-emerald-700 hover:bg-emerald-800 focus:ring-emerald-300",
   },
   { // 3 - amber to orange, uppercase grotesk
     font: "pl-font-grotesk",
@@ -173,7 +170,7 @@ const TITLE_THEMES = [
     accentExtra: "",
     band: "via-cyan-100/60",
     bar: "h-1 w-10 rounded-full bg-gradient-to-r from-cyan-600 to-blue-500",
-    button: "border-cyan-700 bg-cyan-600 hover:bg-cyan-700 focus:ring-cyan-300",
+    button: "border-cyan-800 bg-cyan-700 hover:bg-cyan-800 focus:ring-cyan-300",
   },
   { // 6 - graphite, bold display
     font: "pl-font-syne",
@@ -240,7 +237,7 @@ const ProductList = ({ category, linkTo, title, subtitle }) => {
   const fetchProducts = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await axios.get(`${API_BASE}/api/v1/get-All-product`);
+      const { data } = await axiosInstance.get('/get-All-product');
       const allProducts = Array.isArray(data) ? data : (data.products || []);
       const filteredProducts = allProducts.filter((product) => product.category?.toLowerCase() === category?.toLowerCase());
       setProducts(filteredProducts.slice(0, 10));
@@ -366,7 +363,7 @@ const ProductList = ({ category, linkTo, title, subtitle }) => {
 
                   <div className="flex-1 flex flex-col justify-between">
                     <div>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">{item.brand || category}</span>
+                      <span className="text-[9px] font-bold text-slate-700 uppercase tracking-wider block mb-0.5">{item.brand || category}</span>
                       <h3 className="text-[12px] font-medium text-slate-700 line-clamp-2 group-hover:text-rose-600 transition-colors duration-200 leading-tight min-h-[2rem]">{item.name}</h3>
                     </div>
 
@@ -379,7 +376,7 @@ const ProductList = ({ category, linkTo, title, subtitle }) => {
             })}
           </div>
         ) : (
-          <div className="text-center py-12 text-xs text-slate-400 font-medium italic bg-white border border-dashed border-slate-200 rounded-xl w-full col-span-2">
+          <div className="text-center py-12 text-xs text-slate-600 font-medium italic bg-white border border-dashed border-slate-200 rounded-xl w-full col-span-2">
             No products found in the {category} category.
           </div>
         )}

@@ -3,6 +3,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { LineChart as LineChartIcon } from 'lucide-react'
 import { Card, EmptyState, GrowthBadge } from './ui'
 import { compactNumber, formatDay, money, number } from './formatters'
+import { usePrefersReducedMotion } from './motion'
 
 const ChartTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null
@@ -22,6 +23,7 @@ const ChartTooltip = ({ active, payload }) => {
 
 // Revenue for the selected range, built only from stats.revenue returned by the API.
 const RevenueChart = ({ revenue, days }) => {
+  const prefersReducedMotion = usePrefersReducedMotion()
   const series = revenue?.series ?? []
   const hasSales = series.some((point) => point.revenue > 0)
 
@@ -82,7 +84,8 @@ const RevenueChart = ({ revenue, days }) => {
                 strokeWidth={2}
                 fill="url(#revenueFill)"
                 activeDot={{ r: 4 }}
-                isAnimationActive={false}
+                isAnimationActive={!prefersReducedMotion}
+                animationDuration={650}
               />
             </AreaChart>
           </ResponsiveContainer>

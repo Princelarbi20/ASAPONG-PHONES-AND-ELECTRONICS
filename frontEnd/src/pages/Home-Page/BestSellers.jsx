@@ -1,10 +1,8 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
-import axios from "axios";
+import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios';
 import { useNavigate } from "react-router-dom";
 import { formatPrice } from '@/lib/utils';
 import SectionTitle from '@/component/SectionTitle';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ""
 
 // Custom scroll hiding fallback
 const scrollbarStyle = `
@@ -36,9 +34,7 @@ const BestSellers = ({ from, end, position }) => {
   const fetchProduct = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await axios.get(
-        `${API_BASE}/api/v1/get-All-product`
-      );
+      const { data } = await axiosInstance.get('/get-All-product');
 
       let allProducts = [];
       if (data && Array.isArray(data.products)) {
@@ -106,8 +102,8 @@ const BestSellers = ({ from, end, position }) => {
 
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
-    if (imgStr.startsWith('http')) return imgStr;
-    return `${API_BASE}/${imgStr.replace(/\\/g, '/')}`;
+    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return imgStr;
+    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
   };
 
   return (
@@ -236,7 +232,7 @@ const BestSellers = ({ from, end, position }) => {
               })}
             </div>
           ) : (
-            <div className="text-center py-16 text-sm text-slate-400 font-medium italic w-full border border-dashed border-slate-200 rounded-2xl bg-white">
+            <div className="text-center py-16 text-sm text-slate-600 font-medium italic w-full border border-dashed border-slate-200 rounded-2xl bg-white">
               No trending phones found at this time.
             </div>
           )}

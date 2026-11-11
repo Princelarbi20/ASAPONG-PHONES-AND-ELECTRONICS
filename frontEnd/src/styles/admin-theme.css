@@ -1,0 +1,100 @@
+/* Admin theme overrides stay inside the admin route so the storefront keeps its own palette. */
+#admin-dashboard[data-theme="dark"] {
+  color-scheme: dark;
+  --admin-bg: #0b1120;
+  --admin-surface: #111a2b;
+  --admin-surface-raised: #172235;
+  --admin-border: #29364a;
+  --admin-text: #e5edf8;
+  --admin-muted: #9aa9bd;
+  background-color: var(--admin-bg) !important;
+  color: var(--admin-text) !important;
+}
+
+#admin-dashboard[data-theme="dark"] aside,
+#admin-dashboard[data-theme="dark"] header,
+#admin-dashboard[data-theme="dark"] [role="dialog"] {
+  background-color: var(--admin-surface) !important;
+  border-color: var(--admin-border) !important;
+  color: var(--admin-text);
+}
+
+#admin-dashboard[data-theme="dark"] main [class*="bg-white"],
+#admin-dashboard[data-theme="dark"] main [class*="bg-gray-50"],
+#admin-dashboard[data-theme="dark"] main [class*="bg-slate-50"],
+#admin-dashboard[data-theme="dark"] main [class*="bg-gray-100"],
+#admin-dashboard[data-theme="dark"] main [class*="bg-slate-100"] {
+  background-color: var(--admin-surface) !important;
+}
+
+#admin-dashboard[data-theme="dark"] main [class*="text-slate-900"],
+#admin-dashboard[data-theme="dark"] main [class*="text-slate-800"],
+#admin-dashboard[data-theme="dark"] main [class*="text-gray-900"],
+#admin-dashboard[data-theme="dark"] main [class*="text-gray-800"],
+#admin-dashboard[data-theme="dark"] main [class*="text-slate-700"],
+#admin-dashboard[data-theme="dark"] main [class*="text-gray-700"] {
+  color: var(--admin-text) !important;
+}
+
+#admin-dashboard[data-theme="dark"] main [class*="text-slate-600"],
+#admin-dashboard[data-theme="dark"] main [class*="text-slate-500"],
+#admin-dashboard[data-theme="dark"] main [class*="text-gray-600"],
+#admin-dashboard[data-theme="dark"] main [class*="text-gray-500"],
+#admin-dashboard[data-theme="dark"] main [class*="text-gray-400"] {
+  color: var(--admin-muted) !important;
+}
+
+#admin-dashboard[data-theme="dark"] [class*="border-slate-"],
+#admin-dashboard[data-theme="dark"] [class*="border-gray-"],
+#admin-dashboard[data-theme="dark"] [class*="divide-slate-"],
+#admin-dashboard[data-theme="dark"] [class*="divide-gray-"] {
+  border-color: var(--admin-border) !important;
+}
+
+#admin-dashboard[data-theme="dark"] main input,
+#admin-dashboard[data-theme="dark"] main select,
+#admin-dashboard[data-theme="dark"] main textarea {
+  color: var(--admin-text);
+  background-color: var(--admin-surface-raised);
+  border-color: var(--admin-border);
+}
+
+#admin-dashboard[data-theme="dark"] main input::placeholder,
+#admin-dashboard[data-theme="dark"] main textarea::placeholder {
+  color: #8493a8;
+}
+
+#admin-dashboard[data-theme="dark"] main tr:hover,
+#admin-dashboard[data-theme="dark"] main [class*="hover:bg-slate-50"]:hover,
+#admin-dashboard[data-theme="dark"] main [class*="hover:bg-gray-50"]:hover {
+  background-color: var(--admin-surface-raised) !important;
+}
+
+#admin-dashboard[data-theme="dark"] main [class*="bg-slate-200/70"] {
+  background-color: #334155 !important;
+}
+
+#admin-dashboard[data-theme="dark"] .recharts-cartesian-grid line {
+  stroke: #334155;
+}
+
+#admin-dashboard[data-theme="dark"] .recharts-cartesian-axis-tick text {
+  fill: #9aa9bd;
+}
+
+#admin-dashboard main .admin-status-badge {
+  color: color-mix(in srgb, var(--status-color) 82%, #111827) !important;
+  background-color: color-mix(in srgb, var(--status-color) 12%, #ffffff) !important;
+  border-color: color-mix(in srgb, var(--status-color) 30%, #ffffff) !important;
+}
+
+#admin-dashboard[data-theme="dark"] main .admin-status-badge {
+  color: color-mix(in srgb, var(--status-color) 44%, #ffffff) !important;
+  background-color: color-mix(in srgb, var(--status-color) 20%, #111a2b) !important;
+  border-color: color-mix(in srgb, var(--status-color) 42%, #111a2b) !important;
+}
+
+#admin-dashboard[data-theme="dark"] main .admin-price-value {
+  color: var(--admin-text) !important;
+}
+

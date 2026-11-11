@@ -1,19 +1,6 @@
-import axios from 'axios';
+import axiosInstance from './axios';
 
 let csrfToken = null;
-
-const configuredApiBase = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
-const apiBase = /\/api\/v1$/.test(configuredApiBase)
-  ? configuredApiBase
-  : /\/api$/.test(configuredApiBase)
-    ? `${configuredApiBase}/v1`
-    : `${configuredApiBase}/api/v1`;
-
-// Point at the versioned API root in both local proxy and deployed setups.
-const axiosInstance = axios.create({
-  baseURL: apiBase,
-  withCredentials: true,
-});
 
 // Added back to satisfy main.jsx import without throwing errors
 export const configureApiSecurity = () => {
@@ -32,23 +19,6 @@ export const getCsrfToken = async () => {
         return null;
     }
 };
-
-// Attach interceptors directly to axiosInstance
-axiosInstance.interceptors.request.use(async (config) => {
-    const method = (config.method || 'get').toLowerCase();
-    if (!['get', 'head', 'options'].includes(method)) {
-        const token = await getCsrfToken();
-        config.headers = config.headers || {};
-        if (token) config.headers['X-CSRF-Token'] = token;
-    }
-
-    const authorization = config.headers?.Authorization || config.headers?.authorization;
-    if (authorization === 'Bearer null' || authorization === 'Bearer undefined') {
-        delete config.headers.Authorization;
-        delete config.headers.authorization;
-    }
-    return config;
-});
 
 export const withCsrf = async (config = {}) => {
     const token = await getCsrfToken();

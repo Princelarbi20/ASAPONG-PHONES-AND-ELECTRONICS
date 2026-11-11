@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axiosInstance, { API_ORIGIN } from '../../lib/axios';
+import axiosInstance, { resolveApiAssetUrl } from '../../lib/axios';
 import { Plus, Edit3, Trash2, Loader2, AlertCircle, X, Info, Calendar, ChevronLeft, ChevronRight, Star, Settings, Filter, ArrowUpDown, ChevronDown, Search } from 'lucide-react';
 import AddProduct from './AddProduct';
 import UpdateProduct from './UpdateProduct';
@@ -124,12 +124,7 @@ export default function Products() {
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
     if (typeof imgStr !== 'string') return 'https://placehold.co/600x400?text=No+Image';
-    if (imgStr.startsWith('http')) return imgStr;
-    const normalizedPath = imgStr.replace(/\\/g, '/');
-    if (normalizedPath.startsWith('/uploads/')) {
-      return `${API_ORIGIN}${normalizedPath}`;
-    }
-    return `${API_ORIGIN}/${normalizedPath.replace(/^\//, '')}`;
+    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
   };
 
   const handleNextImage = (e, totalImages) => {

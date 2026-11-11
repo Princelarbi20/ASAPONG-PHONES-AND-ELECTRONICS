@@ -1,50 +1,50 @@
 import { Routes, Route } from 'react-router-dom';
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Toaster } from 'react-hot-toast'; 
 import { Loader2 } from 'lucide-react';
 import axiosInstance from './lib/axios';
 import { authAction } from './redux/store';
 
-// Admin layout imports
-import AdminLayout from "./pages/admin/dashboard/DashboardLayout";
-import Dashboard from "./pages/admin/dashboard/AdminDashboard";
-import Transactions from "./pages/admin/dashboard/Transactions";
-import Products from "./pages/admin/Products";
-import Orders from "./pages/admin/Orders";
-import Users from "./pages/admin/Users";
-import { AddNewUser } from "./pages/admin/Add-New-User";
-import ShopRequests from './pages/admin/ShopRequests';
-import { RegisteredShops } from './pages/admin/RegisterdShops';
+// Keep the session/auth guard small and load each route's page only when visited.
+import CheckAuth from './Data/CheckAuth';
+const AdminLayout = lazy(() => import('./pages/admin/dashboard/DashboardLayout'));
+const Dashboard = lazy(() => import('./pages/admin/dashboard/AdminDashboard'));
+const Transactions = lazy(() => import('./pages/admin/dashboard/Transactions'));
+const Products = lazy(() => import('./pages/admin/Products'));
+const Orders = lazy(() => import('./pages/admin/Orders'));
+const Users = lazy(() => import('./pages/admin/Users'));
+const AddNewUser = lazy(() => import('./pages/admin/Add-New-User').then((module) => ({ default: module.AddNewUser })));
+const ShopRequests = lazy(() => import('./pages/admin/ShopRequests'));
+const RegisteredShops = lazy(() => import('./pages/admin/RegisterdShops').then((module) => ({ default: module.RegisteredShops })));
+const AuthLayout = lazy(() => import('./pages/auth/AuthLayout'));
+const Login = lazy(() => import('./pages/auth/Login'));
+const Register = lazy(() => import('./pages/auth/Register'));
+const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
+const PageNotFound = lazy(() => import('./component/PageNotFound'));
+const HomePage = lazy(() => import('./pages/Home-Page/HomePage'));
+const LandingPage = lazy(() => import('./pages/Home-Page/LandingPage'));
+const Cart = lazy(() => import('./pages/USER/Cart'));
+const Phones = lazy(() => import('./pages/Home-Page/PhonesCategrory'));
+const Laptops = lazy(() => import('./pages/Home-Page/LaptopsCategrory'));
+const Fridge = lazy(() => import('./pages/Home-Page/FridgeCategrory'));
+const Television = lazy(() => import('./pages/Home-Page/TelevisionCategrory'));
+const Speakers = lazy(() => import('./pages/Home-Page/SpeakersCategrory'));
+const Accessories = lazy(() => import('./pages/Home-Page/AccessoriesCategrory'));
+const WashingMachines = lazy(() => import('./pages/Home-Page/WashingMachinesCategrory'));
+const Checkout = lazy(() => import('./pages/USER/Checkout'));
+const MyOrders = lazy(() => import('./pages/USER/MyOrders'));
+const PaymentSuccess = lazy(() => import('./pages/USER/PaymentSuccess'));
+const ProductDetail = lazy(() => import('./component/ProductDetail'));
+const ShopRegister = lazy(() => import('./pages/DELLEAR/ShopRegister'));
+const DellearLayout = lazy(() => import('./pages/DELLEAR/DellearLayout'));
+const OtpVerification = lazy(() => import('./pages/auth/OtpVerification'));
 
-// Auth shell imports
-import AuthLayout from "./pages/auth/AuthLayout";
-import Login from "./pages/auth/Login";
-import Register from "./pages/auth/Register";
-import ResetPassword from "./pages/auth/ResetPassword";
-import PageNotFound from "./component/PageNotFound";
-
-
-// Home page imports 
-import HomePage from './pages/Home-Page/HomePage';
-import LandingPage from './pages/Home-Page/LandingPage';
-import CheckAuth from './Data/CheckAuth'; // Fully synchronous guard engine
-import Cart from './pages/USER/Cart';
-import Phones from './pages/Home-Page/PhonesCategrory';
-import Laptops from './pages/Home-Page/LaptopsCategrory';
-import Fridge from './pages/Home-Page/FridgeCategrory';
-import Television from './pages/Home-Page/TelevisionCategrory';
-import Speakers from './pages/Home-Page/SpeakersCategrory';
-import Accessories from './pages/Home-Page/AccessoriesCategrory';
-import WashingMachines from './pages/Home-Page/WashingMachinesCategrory';
-import Checkout from './pages/USER/Checkout';
-import MyOrders from './pages/USER/MyOrders';
-import PaymentSuccess from './pages/USER/PaymentSuccess';
-import ProductDetail from './component/ProductDetail';
-// Dealer shell imports
-import ShopRegister from './pages/DELLEAR/ShopRegister';
-import DellearLayout from './pages/DELLEAR/DellearLayout';
-import OtpVerification from './pages/auth/OtpVerification';
+const RouteLoading = () => (
+  <div className="flex min-h-screen items-center justify-center bg-slate-50" role="status" aria-label="Loading page">
+    <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+  </div>
+);
 
 
 const App = () => {
@@ -112,6 +112,7 @@ const App = () => {
         }}
       />
 
+      <Suspense fallback={<RouteLoading />}>
       <Routes>
         
         {/* =========================================================
@@ -200,6 +201,7 @@ const App = () => {
         <Route path="*" element={<PageNotFound />} />
       
       </Routes>
+      </Suspense>
     </>
   );
 };

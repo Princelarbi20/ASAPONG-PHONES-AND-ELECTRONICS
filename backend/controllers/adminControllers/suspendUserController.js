@@ -1,5 +1,6 @@
 import { Register } from "../../modules/userRegister.js";
 import sendEmail from "../../utils/nodemailer.js";
+import { escapeHtml } from "../../utils/escapeHtml.js";
 
 export const suspendUserController = async (req,res,next) => {
   try {
@@ -54,7 +55,7 @@ export const suspendUserController = async (req,res,next) => {
                                         <td style="padding:32px 28px;text-align:center;">
 
                                             <h2 style="color:#111827;">
-                                                Hello, ${user.userName}!
+                                                Hello, ${escapeHtml(user.userName)}!
                                             </h2>
 
                                             <p style="color:#4b5563;font-size:14px;line-height:1.5;">

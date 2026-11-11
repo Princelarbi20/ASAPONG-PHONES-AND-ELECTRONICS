@@ -1,0 +1,166 @@
+@keyframes admin-page-enter {
+  from { opacity: 0; transform: translate3d(0, 9px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes admin-row-enter {
+  from { opacity: 0; transform: translate3d(0, 5px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes admin-value-enter {
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes admin-category-bar-enter {
+  from { width: 0; }
+  to { width: var(--category-width); }
+}
+
+#admin-dashboard .admin-page-enter {
+  animation: admin-page-enter 360ms cubic-bezier(.2,.7,.2,1) both;
+}
+
+#admin-dashboard .admin-stagger > * {
+  animation: admin-page-enter 420ms cubic-bezier(.2,.7,.2,1) both;
+}
+
+#admin-dashboard .admin-stagger > :nth-child(2) { animation-delay: 45ms; }
+#admin-dashboard .admin-stagger > :nth-child(3) { animation-delay: 90ms; }
+#admin-dashboard .admin-stagger > :nth-child(4) { animation-delay: 135ms; }
+#admin-dashboard .admin-stagger > :nth-child(5) { animation-delay: 180ms; }
+
+#admin-dashboard .admin-card-motion {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+#admin-dashboard .admin-card-motion:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgb(15 23 42 / 8%);
+}
+
+#admin-dashboard .admin-stat-value {
+  animation: admin-value-enter 360ms ease both;
+}
+
+#admin-dashboard .admin-category-list > li {
+  animation: admin-row-enter 280ms ease both;
+}
+
+#admin-dashboard .admin-category-list > li:nth-child(2) { animation-delay: 35ms; }
+#admin-dashboard .admin-category-list > li:nth-child(3) { animation-delay: 70ms; }
+#admin-dashboard .admin-category-list > li:nth-child(4) { animation-delay: 105ms; }
+#admin-dashboard .admin-category-list > li:nth-child(5) { animation-delay: 140ms; }
+#admin-dashboard .admin-category-list > li:nth-child(6) { animation-delay: 175ms; }
+
+#admin-dashboard .admin-category-bar {
+  width: var(--category-width);
+  background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
+  animation: admin-category-bar-enter 520ms cubic-bezier(.2,.7,.2,1) both;
+  transition: filter 180ms ease, box-shadow 180ms ease;
+}
+
+#admin-dashboard .admin-category-list li:hover .admin-category-bar {
+  filter: brightness(1.08);
+  box-shadow: 0 0 10px rgb(99 102 241 / 32%);
+}
+
+#admin-dashboard[data-theme="dark"] .admin-category-track {
+  background-color: #29364a;
+}
+
+#admin-dashboard[data-theme="dark"] .admin-category-bar {
+  background: linear-gradient(90deg, #818cf8 0%, #22d3ee 100%);
+}
+
+#admin-dashboard .admin-nav-link {
+  position: relative;
+  transition: color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+#admin-dashboard .admin-nav-link:not([aria-current="page"]):hover {
+  transform: translateX(2px);
+}
+
+#admin-dashboard .admin-nav-link::before {
+  position: absolute;
+  inset-block: 9px;
+  inset-inline-start: 0;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: #818cf8;
+  content: "";
+  transform: scaleY(0);
+  transition: transform 180ms ease;
+}
+
+#admin-dashboard .admin-nav-link[aria-current="page"]::before {
+  transform: scaleY(1);
+}
+
+#admin-dashboard main button,
+#admin-dashboard main a,
+#admin-dashboard main input,
+#admin-dashboard main select,
+#admin-dashboard main textarea {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-duration: 160ms;
+  transition-timing-function: ease;
+}
+
+#admin-dashboard main button:active,
+#admin-dashboard main a:active {
+  transform: scale(.985);
+}
+
+#admin-dashboard main table tbody tr {
+  transition: background-color 140ms ease;
+}
+
+#admin-dashboard .recharts-pie-sector path {
+  transition: filter 160ms ease;
+}
+
+#admin-dashboard .recharts-pie-sector:hover path {
+  filter: brightness(1.12);
+}
+
+#admin-dashboard main table.admin-animated-table tbody tr {
+  animation: admin-row-enter 280ms ease both;
+}
+
+#admin-dashboard main table.admin-animated-table tbody tr:nth-child(2) { animation-delay: 25ms; }
+#admin-dashboard main table.admin-animated-table tbody tr:nth-child(3) { animation-delay: 50ms; }
+#admin-dashboard main table.admin-animated-table tbody tr:nth-child(4) { animation-delay: 75ms; }
+#admin-dashboard main table.admin-animated-table tbody tr:nth-child(5) { animation-delay: 100ms; }
+#admin-dashboard main table.admin-animated-table tbody tr:nth-child(6) { animation-delay: 125ms; }
+#admin-dashboard main table.admin-animated-table tbody tr:nth-child(n + 7) { animation: none; }
+
+#admin-dashboard .admin-modal-backdrop {
+  animation: admin-page-enter 180ms ease both;
+}
+
+#admin-dashboard .admin-modal-panel {
+  animation: admin-page-enter 220ms cubic-bezier(.2,.7,.2,1) both;
+}
+
+#admin-dashboard[data-theme="dark"] .admin-card-motion:hover {
+  box-shadow: 0 14px 30px rgb(0 0 0 / 24%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #admin-dashboard *,
+  #admin-dashboard *::before,
+  #admin-dashboard *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  #admin-dashboard .admin-card-motion:hover,
+  #admin-dashboard .admin-nav-link:not([aria-current="page"]):hover {
+    transform: none;
+  }
+}

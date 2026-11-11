@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import axiosInstance from '../../lib/axios';
 
 // Get backend base URL from Vite environment variables with a fallback
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-
 export const AddNewUser = () => {
   const [formData, setFormData] = useState({
     userName: '',
@@ -25,11 +23,8 @@ export const AddNewUser = () => {
     setErrorMsg('');
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/v1/user-register`, formData, {
-        withCredentials: true
-      });
-      alert('Registration successful!');
-      console.log(response.data);
+      const response = await axiosInstance.post('/add-new-admin', formData);
+      setErrorMsg(response.data.message || 'Account created successfully.');
     } catch (error) {
       console.error('Registration error:', error.response?.data || error.message);
       setErrorMsg(error.response?.data?.message || 'Registration failed. Please try again.');
@@ -75,6 +70,8 @@ export const AddNewUser = () => {
                 name="userName"
                 type="text"
                 required
+                minLength={2}
+                maxLength={80}
                 className="block w-full rounded-md border border-gray-300 px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm bg-gray-50/50 focus:bg-white transition-all"
                 placeholder="johndoe"
                 value={formData.userName}
@@ -92,8 +89,10 @@ export const AddNewUser = () => {
                 name="phone"
                 type="tel"
                 required
+                pattern="(?:\\+?233|0)[0-9]{9}"
+                maxLength={16}
                 className="block w-full rounded-md border border-gray-300 px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm bg-gray-50/50 focus:bg-white transition-all"
-                placeholder="+1 (555) 000-0000"
+                placeholder="+233 24 123 4567"
                 value={formData.phone}
                 onChange={handleChange}
               />
@@ -109,6 +108,7 @@ export const AddNewUser = () => {
                 name="email"
                 type="email"
                 required
+                maxLength={254}
                 className="block w-full rounded-md border border-gray-300 px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm bg-gray-50/50 focus:bg-white transition-all"
                 placeholder="name@company.com"
                 value={formData.email}
@@ -126,6 +126,9 @@ export const AddNewUser = () => {
                 name="password"
                 type="password"
                 required
+                minLength={8}
+                maxLength={128}
+                pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,128}"
                 className="block w-full rounded-md border border-gray-300 px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm bg-gray-50/50 focus:bg-white transition-all"
                 placeholder="••••••••"
                 value={formData.password}
@@ -141,6 +144,7 @@ export const AddNewUser = () => {
               <select
                 id="role"
                 name="role"
+                required
                 className="block w-full rounded-md border border-gray-300 px-3 py-2.5 text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm bg-gray-50/50 focus:bg-white transition-all"
                 value={formData.role}
                 onChange={handleChange}

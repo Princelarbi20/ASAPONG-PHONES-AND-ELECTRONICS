@@ -14,8 +14,7 @@ export const verifyOtpController = async (req, res) => {
         }
 
         // 2. Find user by email
-        // `otp` is excluded by the schema by default, so explicitly select it
-        // before comparing the submitted code with its stored hash.
+
         const user = await Register.findOne({ email: email.toLowerCase().trim() }).select('+otp');
 
         if (!user) {

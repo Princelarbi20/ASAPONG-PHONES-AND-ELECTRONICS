@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axiosInstance from '../../lib/axios';
+import axiosInstance, { resolveApiAssetUrl } from '../../lib/axios';
 import { X, Loader2, Upload, Star, Trash2 } from 'lucide-react';
-
-// Get backend base URL from Vite environment variables with an empty fallback
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // Dynamic Category Configuration Matrix for All Specification Sheets
 const CATEGORY_CONFIG = {
@@ -127,8 +124,14 @@ export default function UpdateProduct({ productToEdit, product, onClose, onRefre
 
   const handleFileChange = (e) => {
     if (e.target.files) {
-      // FIXED: Appends files consecutively instead of overwriting selection array states
-      setNewImages(prev => [...prev, ...Array.from(e.target.files)]);
+      const files = Array.from(e.target.files);
+      if (newImages.length + files.length > 6 || files.some((file) => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+        setErrorMsg('Choose up to 6 JPEG, PNG, or WebP images (5 MB maximum each).');
+        e.target.value = '';
+        return;
+      }
+      setErrorMsg('');
+      setNewImages((previous) => [...previous, ...files]);
     }
   };
 
@@ -142,12 +145,7 @@ export default function UpdateProduct({ productToEdit, product, onClose, onRefre
 
   const getImageUrlPreview = (imgStr) => {
     if (!imgStr) return '';
-    if (imgStr.startsWith('http')) return imgStr;
-    const normalizedPath = imgStr.replace(/\\/g, '/');
-    if (normalizedPath.startsWith('/uploads/')) {
-      return `${API_BASE_URL}${normalizedPath}`;
-    }
-    return `${API_BASE_URL}/${normalizedPath.replace(/^\//, '')}`;
+    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
   };
 
   const handleUpdate = async (e) => {
@@ -237,6 +235,7 @@ export default function UpdateProduct({ productToEdit, product, onClose, onRefre
               type="text"
               name="name"
               required
+              maxLength={120}
               value={formData.name}
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm"
@@ -284,6 +283,7 @@ export default function UpdateProduct({ productToEdit, product, onClose, onRefre
                 required
                 step="1"
                 min="0"
+                max="100000000"
                 value={formData.price}
                 onChange={handleChange}
                 className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm"
@@ -296,6 +296,8 @@ export default function UpdateProduct({ productToEdit, product, onClose, onRefre
                 name="stock"
                 required
                 min="0"
+                max="1000000"
+                step="1"
                 value={formData.stock}
                 onChange={handleChange}
                 className="w-full px-2.5 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm"
@@ -331,6 +333,7 @@ export default function UpdateProduct({ productToEdit, product, onClose, onRefre
               name="description"
               required
               rows="2"
+              maxLength={5000}
               value={formData.description}
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm resize-none"
@@ -392,6 +395,7 @@ export default function UpdateProduct({ productToEdit, product, onClose, onRefre
               </div>
               <input
                 type="file"
+                accept="image/jpeg,image/png,image/webp"
                 multiple
                 accept="image/*"
                 onChange={handleFileChange}

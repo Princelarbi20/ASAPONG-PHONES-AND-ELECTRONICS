@@ -4,16 +4,21 @@ const productSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
-        trim: true
+        trim: true,
+        minlength: 1,
+        maxlength: 120
     },
     description: { 
         type: String,
-        required: true
+        required: true,
+        trim: true,
+        maxlength: 5000
     },
     price: { 
         type: Number,
         required: true,
         min: 0,
+        max: 100000000,
         validate: {
             validator: Number.isInteger,
             message: "Product price must be a whole number."
@@ -22,35 +27,46 @@ const productSchema = new mongoose.Schema({
     category: { 
         type: String,
         required: true,
+        trim: true,
+        minlength: 1,
+        maxlength: 100,
         index: true 
     },
     brand: {              
         type: String,
         required: true,
-        trim: true
+        trim: true,
+        minlength: 1,
+        maxlength: 100
     },
     stock: {
         type: Number,
         required: true,
-        default: 0
+        default: 0,
+        min: 0,
+        max: 1000000,
+        validate: Number.isInteger
     },
     images: [ 
-        { type: String }
+        { type: String, maxlength: 2048 }
     ],
     imagePublicIds: [
-        { type: String }
+        { type: String, maxlength: 255 }
     ],
     rating: {             
         type: Number,
         required: true,
         min: 1,
         max: 5,
+        validate: Number.isFinite,
         default: 1
     },
     shop: {
         type: String,
         ref: 'ShopRequest', 
-        required: true
+        required: true,
+        trim: true,
+        maxlength: 120
     },
     newArrival:{
         type: Boolean,
@@ -62,8 +78,8 @@ const productSchema = new mongoose.Schema({
     },
     specifications: [
         {
-            key: { type: String, required: true },   
-            value: { type: String, required: true } 
+            key: { type: String, required: true, trim: true, minlength: 1, maxlength: 100 },
+            value: { type: String, required: true, trim: true, maxlength: 1000 }
         }
     ]
 }, {
