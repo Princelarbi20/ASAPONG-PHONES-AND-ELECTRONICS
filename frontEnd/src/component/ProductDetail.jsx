@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios';
 import toast from 'react-hot-toast';
-import { Loader2, AlertCircle, ArrowLeft, ShoppingCart, Heart, ShieldCheck, Truck, RotateCcw, Settings, Info, Sparkles, Star } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowLeft, ShoppingCart, Heart, ShieldCheck, Truck, RotateCcw, Settings, Info, Sparkles, Star, X } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { authAction } from '../redux/store';
 
@@ -18,8 +18,19 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [isWishlisted, setIsWishlisted] = useState(false);
+
+  useEffect(() => {
+    if (!isImageViewerOpen) return undefined;
+
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setIsImageViewerOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isImageViewerOpen]);
 
   useEffect(() => {
     let isMounted = true;
@@ -139,17 +150,49 @@ export default function ProductDetail() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10 space-y-8 md:space-y-14 pb-24 md:pb-10">
 
+      {isImageViewerOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Full-size image of ${product.name}`}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setIsImageViewerOpen(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setIsImageViewerOpen(false)}
+            aria-label="Close full-size image"
+            className="absolute right-4 top-4 rounded-full bg-white/15 p-2 text-white transition hover:bg-white/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <img
+            src={getSingleImageUrl(product.images?.[activeImageIndex])}
+            alt={product.name}
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[92vh] max-w-[96vw] cursor-zoom-out object-contain"
+          />
+        </div>
+      )}
+
       {/* 1. MAIN UPPER DISPLAY BOX SPLIT GRID */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10 items-start">
 
         {/* Left Side Gallery Display Window */}
         <div className="md:col-span-6 flex flex-col space-y-4 w-full h-full justify-start">
           <div className="w-full h-[320px] sm:h-[420px] md:h-[450px] max-h-[450px] bg-white border border-gray-100 rounded-2xl relative flex items-center justify-center p-6 shadow-sm overflow-hidden shrink-0">
-            <img
-              src={getSingleImageUrl(product.images?.[activeImageIndex])}
-              alt={product.name}
-              className={`max-w-full max-h-full object-contain transition duration-300 ${isSoldOut ? 'opacity-60' : ''}`}
-            />
+            <button
+              type="button"
+              onClick={() => setIsImageViewerOpen(true)}
+              aria-label={`View full-size image of ${product.name}`}
+              className="flex h-full w-full cursor-zoom-in items-center justify-center"
+            >
+              <img
+                src={getSingleImageUrl(product.images?.[activeImageIndex])}
+                alt={product.name}
+                className={`max-w-full max-h-full object-contain transition duration-300 ${isSoldOut ? 'opacity-60' : ''}`}
+              />
+            </button>
             {isSoldOut && (
               <span className="absolute top-4 left-4 bg-red-600 text-white text-[10px] font-bold px-2.5 py-1 rounded shadow-md tracking-wider uppercase">
                 Sold Out

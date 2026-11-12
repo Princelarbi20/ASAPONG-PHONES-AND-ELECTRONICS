@@ -1,5 +1,6 @@
 import { Product } from "../../modules/productSchema.js";
 import { getPagination, paginationResult } from "../../utils/pagination.js";
+import { performance } from 'node:perf_hooks';
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -29,10 +30,19 @@ export const getAllProducts = async (req, res) => {
     if (paginated) {
       const pageOptions = getPagination(req.query, { defaultLimit: 12, maxLimit: 100 });
       productsQuery = productsQuery.skip(pageOptions.skip).limit(pageOptions.limit);
+      const queryStartedAt = performance.now();
       const [products, matchingCount] = await Promise.all([
-        productsQuery,
+        productsQuery.lean(),
         Product.countDocuments(filter),
       ]);
+      req.productListDbMs = Number((performance.now() - queryStartedAt).toFixed(1));
+      req.productListResultCount = products.length;
+      req.productListPaginated = true;
+      console.info('[performance] products_db_query', JSON.stringify({
+        dbMs: req.productListDbMs,
+        resultCount: products.length,
+        paginated: true,
+      }));
       total = matchingCount;
       pagination = paginationResult(pageOptions.page, pageOptions.limit, total);
       return res.status(200).json({
@@ -42,7 +52,16 @@ export const getAllProducts = async (req, res) => {
         pagination,
       });
     }
-    const products = await productsQuery;
+    const queryStartedAt = performance.now();
+    const products = await productsQuery.lean();
+    req.productListDbMs = Number((performance.now() - queryStartedAt).toFixed(1));
+    req.productListResultCount = products.length;
+    req.productListPaginated = false;
+    console.info('[performance] products_db_query', JSON.stringify({
+      dbMs: req.productListDbMs,
+      resultCount: products.length,
+      paginated: false,
+    }));
     total = products.length;
 
     // Respond with a structured object that matches your frontend expectations

@@ -106,6 +106,32 @@ const Navbar = ({ globalSearchQuery, setGlobalSearchQuery }) => {
     setIsMenuOpen(!isMenuOpen);
   };
 
+  const renderAuthMenuItem = (closeMenu) => isAuthenticated ? (
+    <button
+      type="button"
+      onClick={handleLogout}
+      className="w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between font-bold text-xs text-red-600 hover:bg-red-100 hover:text-red-700"
+    >
+      <span className="flex items-center gap-2.5">
+        <LogOut className="w-4 h-4 text-red-500" />
+        Sign Out
+      </span>
+      <ChevronRight className="w-3.5 h-3.5 opacity-60" />
+    </button>
+  ) : (
+    <Link
+      to="/auth/login"
+      onClick={closeMenu}
+      className="w-full text-left px-3.5 py-2.5 rounded-xl transition-all duration-200 flex items-center justify-between font-bold text-xs text-gray-600 hover:bg-red-100 hover:text-red-500"
+    >
+      <span className="flex items-center gap-2.5">
+        <User className="w-4 h-4 text-slate-400" />
+        Sign In
+      </span>
+      <ChevronRight className="w-3.5 h-3.5 opacity-60" />
+    </Link>
+  );
+
   useEffect(() => {
     const fetchAllProducts = async () => {
       try {
@@ -320,32 +346,7 @@ const Navbar = ({ globalSearchQuery, setGlobalSearchQuery }) => {
               )}
             </NavLink>
           ))}
-        </div>
-
-        <div className="mt-auto pt-4 border-t border-gray-100">
-          {isAuthenticated ? (
-            <div className="flex items-center gap-1.5 w-full">
-              <div className="flex items-center gap-1 flex-1 bg-gray-50 border border-gray-100 px-2 py-2 rounded-xl text-[11px] font-bold text-gray-600 min-w-0">
-                <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                <span className="truncate">{user?.userName || 'User'}</span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="bg-red-50 text-red-600 p-2 rounded-xl flex items-center justify-center border border-red-200 hover:bg-red-100 shadow-2xs cursor-pointer shrink-0"
-                title="Sign Out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <Link
-              to="/auth/login"
-              onClick={() => setIsMenuOpen(false)}
-              className="block w-full bg-red-400 text-white text-center text-xs font-bold py-2 rounded-xl hover:bg-red-500 shadow-xs transition"
-            >
-              Sign In
-            </Link>
-          )}
+          {activeTab === "profile" && renderAuthMenuItem(() => setIsMenuOpen(false))}
         </div>
       </div>
 
@@ -418,32 +419,7 @@ const Navbar = ({ globalSearchQuery, setGlobalSearchQuery }) => {
               )}
             </NavLink>
           ))}
-        </div>
-
-        <div className="mt-auto pt-4 border-t border-gray-100">
-          {isAuthenticated ? (
-            <div className="flex items-center gap-1.5 w-full">
-              <div className="flex items-center gap-1 flex-1 bg-gray-50 border border-gray-100 px-2 py-2 rounded-xl text-[11px] font-bold text-gray-600 min-w-0">
-                <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                <span className="truncate">{user?.userName || 'User'}</span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="bg-red-50 text-red-600 p-2 rounded-xl flex items-center justify-center border border-red-200 hover:bg-red-100 shadow-2xs cursor-pointer shrink-0"
-                title="Sign Out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <Link
-              to="/auth/login"
-              onClick={() => setIsvisible(false)}
-              className="block w-full bg-red-400 text-white text-center text-xs font-bold py-2 rounded-xl hover:bg-red-500 shadow-xs transition"
-            >
-              Sign In
-            </Link>
-          )}
+          {activeTab === "profile" && renderAuthMenuItem(() => setIsvisible(false))}
         </div>
       </div>
     </nav>

@@ -27,8 +27,7 @@ export const resolveApiAssetUrl = (assetPath) => {
 };
 
 const axiosInstance = axios.create({
-  // VITE_API_BASE_URL may be an origin, /api, or /api/v1.
-  // Normalize every API call to the backend's versioned route prefix.
+  
   baseURL: API_ENDPOINT_BASE,
   withCredentials: true,
 });

@@ -34,6 +34,8 @@ const Fridge = lazy(() => import('./pages/Home-Page/FridgeCategrory'));
 const Television = lazy(() => import('./pages/Home-Page/TelevisionCategrory'));
 const Speakers = lazy(() => import('./pages/Home-Page/SpeakersCategrory'));
 const Accessories = lazy(() => import('./pages/Home-Page/AccessoriesCategrory'));
+const Appliances = lazy(() => import('./pages/Home-Page/AppliancesCategrory'));
+const AirConditions = lazy(() => import('./pages/Home-Page/AirConditionsCategrory'));
 const WashingMachines = lazy(() => import('./pages/Home-Page/WashingMachinesCategrory'));
 const Checkout = lazy(() => import('./pages/USER/Checkout'));
 const MyOrders = lazy(() => import('./pages/USER/MyOrders'));
@@ -129,6 +131,8 @@ const App = () => {
           <Route path='television' element={<Television />}/>
           <Route path='speakers' element={<Speakers />}/>
           <Route path='accessories' element={<Accessories />}/>
+          <Route path='appliances' element={<Appliances />}/>
+          <Route path='air-conditions' element={<AirConditions />}/>
           <Route path='washing-machines' element={<WashingMachines />}/>
           <Route path='product-details/:id' element={<ProductDetail />} />
           

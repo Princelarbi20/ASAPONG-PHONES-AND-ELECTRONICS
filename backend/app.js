@@ -6,6 +6,7 @@ import cors from "cors";
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cookieParser from 'cookie-parser';
+import { performance } from 'node:perf_hooks';
 import { userRouter } from './route/userRouter.js';
 import { adminRouter } from './route/adminRouter.js';
 import { paymentRouter } from './route/paymentRouter.js';
@@ -39,8 +40,6 @@ for (const variable of [
 ]) {
   if (!process.env[variable]) throw new Error(`${variable} must be configured before the server starts.`);
 }
-connectDB();
-
 // --- ES MODULES PATH SETUPS ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -85,6 +84,24 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+const startServer = async () => {
+  const startedAt = performance.now();
+  try {
+    await connectDB();
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server is running on port ${PORT}`);
+      console.info('[performance] app_ready', JSON.stringify({
+        startupMs: Number((performance.now() - startedAt).toFixed(1)),
+      }));
+    });
+  } catch (error) {
+    console.error('[startup] database_connection_failed', JSON.stringify({
+      name: error.name,
+      code: error.code || null,
+      startupMs: Number((performance.now() - startedAt).toFixed(1)),
+    }));
+    process.exit(1);
+  }
+};
+
+startServer();

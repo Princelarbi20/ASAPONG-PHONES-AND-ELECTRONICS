@@ -371,7 +371,7 @@ export default function CategoryGrid({
   return (
     <div className="max-w-[1440px] mx-auto p-4 md:p-6 font-sans antialiased text-gray-900 bg-white h-[calc(100vh-80px)] flex flex-col overflow-hidden relative">
 
-      {/* 🚀 1. MOBILE DEVICE TOP CONTROLS STRIP */}
+      {/*  1. MOBILE DEVICE TOP CONTROLS STRIP */}
       <div className="lg:hidden shrink-0 sticky top-0 z-40 flex items-center gap-3 bg-white pb-4 border-b border-gray-100">
         <button
           onClick={() => setIsMobileFilterOpen(true)}
@@ -398,7 +398,7 @@ export default function CategoryGrid({
         </div>
       </div>
 
-      {/* 🚀 2. MOBILE FILTER DRAWER MODULE */}
+      {/* 2. MOBILE FILTER DRAWER MODULE */}
       <div
         className={`lg:hidden fixed inset-0 z-50 transition-visibility duration-300 ${isMobileFilterOpen ? 'visible' : 'invisible'
           }`}
@@ -484,6 +484,12 @@ export default function CategoryGrid({
                     <div
                       key={`${id ?? 'product'}-${index}`}
                       className="text-gray-700 cursor-pointer flex flex-col group border border-gray-200/70 rounded-xl p-3.5 bg-white hover:shadow-md hover:border-gray-300/80 transition-all duration-300 relative"
+                      onClick={(event) => {
+                        // Keep the cart and wishlist actions independent from
+                        // opening the product details page.
+                        if (event.target.closest('button, a')) return;
+                        navigate(`/product-details/${id}`);
+                      }}
                     >
                       {/* Media Image Viewport */}
                       <div className="overflow-hidden bg-white rounded-lg aspect-square relative flex items-center justify-center group/image">
