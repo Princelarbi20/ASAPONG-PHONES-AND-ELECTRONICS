@@ -12,11 +12,16 @@ const orderSchema = new mongoose.Schema(
       validate: Number.isInteger,
     },
 
+    customerType: { type: String, enum: ["REGISTERED", "GUEST"], default: "REGISTERED" },
+
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
-      required: true,
+      required() { return this.customerType !== "GUEST"; },
+      index: true,
     },
+    customerName: { type: String, trim: true, maxlength: 80 },
+    customerEmail: { type: String, trim: true, lowercase: true, maxlength: 254 },
 
     items: [
       {

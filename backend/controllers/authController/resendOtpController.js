@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import { Register } from "../../modules/userRegister.js";
 import sendEmail from "../../utils/nodemailer.js";
 import { escapeHtml } from "../../utils/escapeHtml.js";
+import { getOtpExpiryMs, OTP_RESEND_COOLDOWN_MS } from "../../config/otp.js";
 
 export const resendOtpController = async (req, res) => {
     try {
@@ -38,13 +39,29 @@ export const resendOtpController = async (req, res) => {
             });
         }
 
+        const now = Date.now();
+        const lastSentAt = user.otpLastSentAt?.getTime?.();
+        if (lastSentAt && now - lastSentAt < OTP_RESEND_COOLDOWN_MS) {
+            const retryAfterSeconds = Math.ceil((OTP_RESEND_COOLDOWN_MS - (now - lastSentAt)) / 1000);
+            return res.status(429).json({
+                success: false,
+                message: `Please wait ${retryAfterSeconds} seconds before requesting another OTP.`,
+                retryAfterSeconds
+            });
+        }
+
         // 4. Generate OTP
         const otp = randomInt(100000, 1000000).toString();
 
         const hashedOtp = await bcrypt.hash(otp, 10);
 
         // 5. Set expiration
-        const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+        const otpExpiryMs = getOtpExpiryMs();
+        const otpExpires = new Date(now + otpExpiryMs);
+
+        // Reserve the cooldown before delivery so repeated requests cannot flood the mail service.
+        user.otpLastSentAt = new Date(now);
+        await user.save();
 
         // 6. Confirm recipient exists
         if (!user.email) {
@@ -55,7 +72,7 @@ export const resendOtpController = async (req, res) => {
         }
        
         // 7. Send OTP email
-        await sendEmail({
+        const emailResult = await sendEmail({
             from: process.env.EMAIL_USER,
             to:user.email,
             subject: "Verify your OTP ",
@@ -109,7 +126,7 @@ export const resendOtpController = async (req, res) => {
 
                                             <p style="color:#6b7280;font-size:12px;">
                                                 This OTP expires in
-                                                <strong style="color:#ef4444;">5 minutes</strong>.
+                                                <strong style="color:#ef4444;">${Math.ceil(otpExpiryMs / 60000)} minutes</strong>.
                                             </p>
 
                                             <p style="color:#9ca3af;font-size:12px;">
@@ -138,6 +155,17 @@ export const resendOtpController = async (req, res) => {
                 </html>
                 `
         });
+        if (!emailResult?.success) {
+            // A failed delivery should not make the user wait through the
+            // resend cooldown; the OTP itself is only committed after send.
+            user.otpLastSentAt = null;
+            await user.save();
+            console.error('Resend OTP email was not delivered:', emailResult?.error || 'Email service returned an unsuccessful result.');
+            return res.status(503).json({
+                success: false,
+                message: 'We could not send the verification email. Please try again later.'
+            });
+        }
 
         // 8. Save OTP after successful email submission
         user.otp = hashedOtp;

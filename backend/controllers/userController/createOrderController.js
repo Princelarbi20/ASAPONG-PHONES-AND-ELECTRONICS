@@ -118,7 +118,10 @@ export const createOrderController = async (req, res, next) => {
         [
           {
             orderNumber,
+            customerType: 'REGISTERED',
             user: req.user.id,
+            customerName: user.userName,
+            customerEmail: user.email,
             items,
             totalPrice,
             status: 'PENDING',

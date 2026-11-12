@@ -29,6 +29,16 @@ const Register = () => {
       // Navigate to OTP verification page with email in state
       navigate('/auth/otp-verify', { state: { email: user.email, otpExpiresAt } })
     } catch (error) {
+      if (error.response?.status === 503 && error.response?.data?.user?.email) {
+        toast.error(error.response.data.message || 'Account created, but the OTP email could not be sent. You can request another code now.');
+        navigate('/auth/otp-verify', {
+          state: {
+            email: error.response.data.user.email,
+            otpExpiresAt: error.response.data.otpExpiresAt,
+          },
+        });
+        return;
+      }
       const serverMessage = error.response?.data?.message;
       const statusText = error.response?.statusText;
       const statusCode = error.response?.status;

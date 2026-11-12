@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/component/Button'
 import { useNavigate } from 'react-router-dom'
-import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios'
+import { resolveApiAssetUrl } from '@/lib/axios'
+import { getProducts } from '@/lib/productApi'
 
 /* ---------- category helpers ---------- */
 
@@ -139,7 +140,7 @@ const PosterDisplay = ({ category = '' }) => {
         setLoading(true);
         setCurrentIndex(0);
 
-        const response = await axiosInstance.get('/get-All-product');
+        const response = await getProducts();
 
         let rawProductsList = [];
         if (response.data && Array.isArray(response.data.products)) {

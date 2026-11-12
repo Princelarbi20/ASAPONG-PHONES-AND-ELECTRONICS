@@ -2,11 +2,12 @@
 
 import React, { useState } from 'react';
 import { Input } from "@base-ui/react/input";
+import { Eye, EyeOff } from 'lucide-react';
 
 export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit, buttonText = "Submit" }) => {
-  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const isRegistration = formControl.some((field) => field.name === 'userName');
 
   const validate = (onlyField) => {
@@ -52,19 +53,16 @@ export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit,
                 placeholder={getControlItem.placeholder}
                 id={getControlItem.name}
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
                 aria-invalid={Boolean(errors[getControlItem.name])}
                 aria-describedby={errors[getControlItem.name] ? `${getControlItem.name}-error` : undefined}
                 value={value}
                 onBlur={() => validate(getControlItem.name)}
                 onChange={(e) => updateValue(getControlItem.name, e.target.value)}
-                className={`w-full rounded-lg border px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm bg-gray-50/50 focus:bg-white transition-all shadow-sm ${errors[getControlItem.name] ? 'border-red-500' : 'border-gray-300'}`}
+                className={`w-full rounded-lg border px-3 py-2.5 pr-12 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm bg-gray-50/50 focus:bg-white transition-all shadow-sm ${errors[getControlItem.name] ? 'border-red-500' : 'border-gray-300'}`}
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-indigo-600 hover:text-indigo-800 focus:outline-none"
-              >
-                {showPassword ? 'Hide' : 'Show'}
+              <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-slate-500 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500">
+                {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
               </button>
             </div>
           );

@@ -496,7 +496,7 @@ export default function CategoryGrid({
 
                         {/* Floating Action Menu Overlay */}
                         {!isSoldOut && (
-                          <div className="absolute inset-0 bg-black/15 opacity-0 group-hover/image:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2 z-20 rounded-lg">
+                          <div className="hidden sm:flex absolute inset-0 bg-black/15 opacity-0 group-hover/image:opacity-100 transition-opacity duration-300 items-center justify-center gap-2 z-20 rounded-lg">
                             <Link
                               to={`/product-details/${id}`}
                               className="p-2 bg-white rounded-full shadow-md text-gray-700 hover:text-rose-800 hover:scale-110 transition duration-200"
@@ -505,7 +505,7 @@ export default function CategoryGrid({
                             </Link>
                             <button
                               onClick={(e) => handleAddToCart(e, id)}
-                              className="p-2 bg-rose-800 rounded-full shadow-md text-white hover:bg-rose-900 hover:scale-110 transition duration-200 cursor-pointer"
+                              className="hidden sm:inline-flex p-2 bg-rose-800 rounded-full shadow-md text-white hover:bg-rose-900 hover:scale-110 transition duration-200 cursor-pointer"
                               aria-label="Add product to cart"
                             >
                               <ShoppingCart className="w-4 h-4" />

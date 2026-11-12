@@ -81,10 +81,10 @@ export const MyOrders = () => {
     const getPaymentMethod = (order) => {
         const details = order.paymentDetails;
         if (order.paymentStatus === 'PAID' && details?.provider) {
-            if (details.serviceProvider) return `${details.serviceProvider} Mobile Money (Paystack)`;
+            if (details.serviceProvider) return `${details.serviceProvider} Mobile Money`;
             return details.channel
-                ? `${details.provider} (${details.channel.replace(/_/g, ' ')})`
-                : details.provider;
+                ? details.channel.replace(/_/g, ' ')
+                : 'Online payment';
         }
         return 'Paystack';
     };

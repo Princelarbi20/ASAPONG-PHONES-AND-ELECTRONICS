@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axiosInstance from '../../lib/axios';
+import { Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom'; // 👈 Added React Router Hook
 
 export const ShopRegister = () => {
@@ -7,6 +8,7 @@ export const ShopRegister = () => {
   
   // Gatekeeper state to view the form
   const [hasAgreed, setHasAgreed] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   
   // Specific checkbox agreements required for e-commerce vendors
   const [checkboxes, setCheckboxes] = useState({
@@ -356,16 +358,19 @@ export const ShopRegister = () => {
             {/* Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700">Account Password</label>
+              <div className="relative">
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 name="password"
                 required
                 minLength={8}
                 maxLength={128}
                 value={formData.password}
                 onChange={handleInputChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full px-3 py-2 pr-12 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
+              <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide account password' : 'Show account password'} aria-pressed={showPassword} className="absolute inset-y-0 right-0 mt-1 flex items-center justify-center px-3 text-slate-500 hover:text-indigo-600">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+              </div>
             </div>
 
             {/* PDF File Upload Field */}

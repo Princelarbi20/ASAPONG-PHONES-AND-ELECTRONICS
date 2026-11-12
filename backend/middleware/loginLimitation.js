@@ -18,6 +18,22 @@ export const otpAttemptLimiter = rateLimit({
     legacyHeaders: false,
 });
 
+export const passwordResetRequestLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: limiterMessage('Too many password reset requests. Please try again later.'),
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+export const passwordResetVerifyLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 15,
+    message: limiterMessage('Too many code verification attempts. Please try again later.'),
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 export const registrationLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
     max: 5,

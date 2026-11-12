@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import Title from "@/component/Title";
-import axiosInstance, { resolveApiAssetUrl } from "@/lib/axios";
+import { resolveApiAssetUrl } from "@/lib/axios";
+import { getProducts } from "@/lib/productApi";
 import PaginationControls from "@/component/PaginationControls";
 import { formatPrice } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -83,9 +84,7 @@ const ProductList = ({ category, linkTo }) => {
   const fetchProducts = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await axiosInstance.get('/get-All-product', {
-        params: { category, page, limit: PAGE_SIZE },
-      });
+      const { data } = await getProducts({ category, page, limit: PAGE_SIZE });
       setProducts(data.products || []);
       setPagination(data.pagination || { total: data.products?.length || 0, totalPages: 1 });
     } catch (error) {

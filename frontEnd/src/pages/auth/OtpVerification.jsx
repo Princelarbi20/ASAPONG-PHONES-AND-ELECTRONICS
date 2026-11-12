@@ -7,10 +7,12 @@ import { withCsrf } from '../../lib/csrf';
 
 const OtpVerification = () => {
   const OTP_LENGTH = 6;
-  const OTP_EXPIRY_MS = 5 * 60 * 1000;
+  const OTP_EXPIRY_MS = 15 * 60 * 1000;
+  const RESEND_COOLDOWN_SECONDS = 60;
   const [otp, setOtp] = useState(new Array(OTP_LENGTH).fill(''));
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [resendWaitSeconds, setResendWaitSeconds] = useState(0);
   const inputRefs = useRef([]);
   const location = useLocation();
   const navigate = useNavigate();
@@ -35,6 +37,12 @@ const OtpVerification = () => {
     const timer = window.setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  React.useEffect(() => {
+    if (resendWaitSeconds <= 0) return undefined;
+    const timer = window.setTimeout(() => setResendWaitSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendWaitSeconds]);
 
   const isComplete = otp.join('').length === OTP_LENGTH;
   const secondsRemaining = Math.max(0, Math.ceil((expiresAt - currentTime) / 1000));
@@ -120,6 +128,7 @@ const OtpVerification = () => {
   };
 
   const handleResend = async () => {
+    if (isResending || resendWaitSeconds > 0) return;
     setIsResending(true);
     try {
       const config = await withCsrf({ withCredentials: true });
@@ -129,9 +138,13 @@ const OtpVerification = () => {
       setOtp(new Array(OTP_LENGTH).fill(''));
       setExpiresAt(Date.parse(response.data.otpExpiresAt) || Date.now() + OTP_EXPIRY_MS);
       setCurrentTime(Date.now());
+      setResendWaitSeconds(RESEND_COOLDOWN_SECONDS);
       inputRefs.current[0]?.focus();
     } catch (error) {
       const errorMessage = error.response?.data?.message || 'Failed to resend OTP. Please try again.';
+      if (error.response?.status === 429 && Number.isFinite(error.response?.data?.retryAfterSeconds)) {
+        setResendWaitSeconds(error.response.data.retryAfterSeconds);
+      }
       toast.error(errorMessage);
     } finally {
       setIsResending(false);
@@ -139,25 +152,17 @@ const OtpVerification = () => {
   };
 
   return (
-    <div className="h-screen w-full bg-transparent flex items-center justify-center p-0">
-      
+    <div className="h-[100dvh] w-full overflow-y-auto overscroll-contain bg-transparent font-sans antialiased">
+
       {/* Embedded keyframe styles for smooth infinite rotation */}
       <style>{`
         @keyframes orbit {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
         @keyframes counter-rotate {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(-360deg);
-          }
+          from { transform: rotate(0deg); }
+          to { transform: rotate(-360deg); }
         }
         .animate-orbit {
           animation: orbit 15s linear infinite;
@@ -165,149 +170,154 @@ const OtpVerification = () => {
         .animate-counter-rotate {
           animation: counter-rotate 15s linear infinite;
         }
+        @media (prefers-reduced-motion: reduce) {
+          .animate-orbit, .animate-counter-rotate { animation: none; }
+        }
       `}</style>
 
       {/* Main Container */}
-      <div className="w-full h-full flex flex-col justify-center items-center space-y-4 sm:space-y-6 overflow-hidden bg-white/10 border border-slate-200/20 p-6 shadow-lg backdrop-blur-sm">
-        
-        {/* Graphic Illustration */}
-        <div className="relative w-44 h-44 sm:w-52 sm:h-52 lg:w-60 lg:h-60 bg-purple-50/50 rounded-full flex items-center justify-center shrink-0">
-          <div className="absolute inset-2 border border-purple-100/80 rounded-full" />
-          <div className="absolute inset-5 border border-purple-100/50 rounded-full" />
+      <div className="flex min-h-full w-full items-center justify-center border border-slate-200/20 bg-white/10 px-4 py-6 shadow-lg backdrop-blur-sm sm:px-8 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]">
+        <div className="flex w-full max-w-sm flex-col items-center gap-4 sm:max-w-md sm:gap-5">
 
-          {/* Stationary Floating Dots */}
-          <span className="absolute top-8 left-10 w-2 h-2 bg-orange-400 rounded-full" />
-          <span className="absolute bottom-6 left-20 w-2.5 h-2.5 bg-amber-500 rounded-full" />
-          <span className="absolute top-12 right-12 w-2 h-2 bg-amber-400 rounded-full" />
+          {/* Graphic Illustration: sized by screen height, hidden on very short screens */}
+          <div
+            aria-hidden="true"
+            className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-purple-50/50 sm:h-36 sm:w-36 [@media(min-height:820px)]:h-48 [@media(min-height:820px)]:w-48 [@media(max-height:620px)]:hidden"
+          >
+            <div className="absolute inset-2 rounded-full border border-purple-100/80" />
+            <div className="absolute inset-4 rounded-full border border-purple-100/50" />
 
-          {/* Central Phone Frame */}
-          <div className="relative z-10 w-16 h-28 sm:w-20 sm:h-32 lg:w-24 lg:h-36 bg-indigo-600 rounded-[22px] p-1.5 shadow-md flex flex-col items-center">
-            <div className="w-full h-full bg-indigo-400/80 rounded-[16px] relative overflow-hidden flex items-center justify-center">
-              <div className="absolute -top-6 -right-6 w-16 h-28 bg-white/20 transform rotate-45" />
+            {/* Stationary Floating Dots */}
+            <span className="absolute left-[15%] top-[16%] h-2 w-2 rounded-full bg-orange-400" />
+            <span className="absolute bottom-[12%] left-[34%] h-2.5 w-2.5 rounded-full bg-amber-500" />
+            <span className="absolute right-[18%] top-[22%] h-2 w-2 rounded-full bg-amber-400" />
+
+            {/* Central Phone Frame */}
+            <div className="relative z-10 flex h-[62%] w-[38%] flex-col items-center rounded-[16px] bg-indigo-600 p-1.5 shadow-md">
+              <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[11px] bg-indigo-400/80">
+                <div className="absolute -right-6 -top-6 h-28 w-16 rotate-45 bg-white/20" />
+              </div>
+              <div className="absolute top-1.5 h-1 w-4 rounded-full bg-indigo-800" />
             </div>
-            <div className="absolute top-2 w-5 h-1 bg-indigo-800 rounded-full" />
+
+            {/* INFINITE REVOLVING ORBIT RING */}
+            <div className="animate-orbit pointer-events-none absolute inset-0 z-20">
+
+              {/* Envelope Icon (Top-Left Position) */}
+              <div className="absolute left-[18%] top-[18%] -translate-x-1/2 -translate-y-1/2">
+                <div className="animate-counter-rotate flex items-center justify-center rounded-lg border-2 border-red-500 bg-white p-1 shadow-md">
+                  <svg className="h-4 w-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Badge 1 (Top-Right Position) */}
+              <div className="absolute right-[18%] top-[18%] -translate-y-1/2 translate-x-1/2">
+                <div className="animate-counter-rotate flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white shadow-md">
+                  1
+                </div>
+              </div>
+
+              {/* Badge 2 (Bottom-Right Position) */}
+              <div className="absolute bottom-[18%] right-[18%] translate-x-1/2 translate-y-1/2">
+                <div className="animate-counter-rotate flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white shadow-md">
+                  2
+                </div>
+              </div>
+
+              {/* Badge 3 (Bottom-Left Position) */}
+              <div className="absolute bottom-[18%] left-[18%] -translate-x-1/2 translate-y-1/2">
+                <div className="animate-counter-rotate flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-xs font-bold text-white shadow-md">
+                  3
+                </div>
+              </div>
+
+            </div>
           </div>
 
-          {/* ======================================================== */}
-          {/* INFINITE REVOLVING ORBIT RING                            */}
-          {/* ======================================================== */}
-          <div className="absolute inset-0 z-20 animate-orbit pointer-events-none">
-            
-            {/* Envelope Icon (Top-Left Position) */}
-            <div className="absolute top-[18%] left-[18%] -translate-x-1/2 -translate-y-1/2">
-              <div className="animate-counter-rotate bg-white border-2 border-red-500 rounded-lg p-1 shadow-md flex items-center justify-center">
-                <svg
-                  className="w-4 h-4 sm:w-5 sm:h-5 text-red-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+          {/* Header Text */}
+          <header className="max-w-xs space-y-1.5 text-center sm:max-w-sm">
+            <h1 className="font-heading text-balance text-xl font-bold leading-tight tracking-tight text-gray-900 sm:text-2xl">
+              Enter OTP
+            </h1>
+            <p className="text-pretty text-sm leading-relaxed text-gray-500">
+              We have sent an OTP to <span className="break-all font-semibold text-gray-700">{email}</span> for verification
+            </p>
+          </header>
+
+          {/* OTP Input Form */}
+          <form onSubmit={handleSubmit} className="w-full space-y-3 sm:space-y-4" noValidate>
+
+            <div className="flex items-center justify-center gap-1.5 sm:gap-3">
+              {otp.map((digit, index) => {
+                const hasValue = digit !== '';
+                return (
+                  <input
+                    key={index}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                    aria-label={`Digit ${index + 1} of ${OTP_LENGTH}`}
+                    maxLength={1}
+                    value={digit}
+                    ref={(el) => (inputRefs.current[index] = el)}
+                    onChange={(e) => handleChange(e, index)}
+                    onKeyDown={(e) => handleKeyDown(e, index)}
+                    onPaste={handlePaste}
+                    disabled={isLoading || isExpired}
+                    className={`h-12 w-full min-w-0 max-w-[3rem] flex-1 rounded-lg border bg-white text-center font-heading text-xl font-bold tabular-nums text-indigo-600 shadow-sm transition-colors duration-200 focus:outline-none focus:ring-2 sm:h-14 sm:max-w-[3.5rem] sm:text-2xl ${
+                      hasValue
+                        ? 'border-green-300 ring-green-100'
+                        : 'border-gray-300 focus:border-indigo-600 focus:ring-indigo-200'
+                    } ${isLoading || isExpired ? 'cursor-not-allowed opacity-50' : ''}`}
                   />
-                </svg>
-              </div>
+                );
+              })}
             </div>
 
-            {/* Badge 1 (Top-Right Position) */}
-            <div className="absolute top-[18%] right-[18%] translate-x-1/2 -translate-y-1/2">
-              <div className="animate-counter-rotate w-6 h-6 sm:w-7 sm:h-7 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-md">
-                1
-              </div>
-            </div>
+            <p
+              className={`text-center text-sm font-medium tabular-nums ${isExpired ? 'text-red-600' : 'text-gray-500'}`}
+              aria-live="polite"
+            >
+              {isExpired ? 'OTP expired. Request a new code below.' : `OTP expires in ${formattedTime}`}
+            </p>
 
-            {/* Badge 2 (Bottom-Right Position) */}
-            <div className="absolute bottom-[18%] right-[18%] translate-x-1/2 translate-y-1/2">
-              <div className="animate-counter-rotate w-6 h-6 sm:w-7 sm:h-7 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-md">
-                2
-              </div>
-            </div>
+            <button
+              type="submit"
+              disabled={isLoading || isExpired || !isComplete}
+              className={`flex min-h-12 w-full items-center justify-center rounded-xl py-3 text-sm font-semibold uppercase tracking-wider shadow-sm transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed ${
+                isComplete && !isLoading && !isExpired
+                  ? 'bg-green-300 text-gray-900 hover:bg-green-400 active:bg-green-500'
+                  : 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-300'
+              }`}
+            >
+              {isLoading ? 'VERIFYING...' : 'VERIFY OTP'}
+            </button>
+          </form>
 
-            {/* Badge 3 (Bottom-Left Position) */}
-            <div className="absolute bottom-[18%] left-[18%] -translate-x-1/2 translate-y-1/2">
-              <div className="animate-counter-rotate w-6 h-6 sm:w-7 sm:h-7 bg-cyan-600 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-md">
-                3
-              </div>
-            </div>
-
-          </div>
-          {/* ======================================================== */}
+          {/* Footer Link */}
+          <footer className="flex w-full flex-col items-center border-t border-gray-100/50 pt-2 text-center">
+            <p className="text-sm text-gray-500">
+              Didn't Receive the OTP?
+            </p>
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={isResending || resendWaitSeconds > 0}
+              className="min-h-11 rounded-md px-3 text-sm font-semibold tabular-nums text-indigo-600 transition-colors hover:text-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isResending ? 'RESENDING...' : resendWaitSeconds > 0 ? `Resend in ${resendWaitSeconds}s` : 'Resend Code'}
+            </button>
+          </footer>
 
         </div>
-
-        {/* Header Text */}
-        <div className="text-center space-y-1 shrink-0">
-          <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight leading-none">
-            Enter OTP
-          </h2>
-          <p className="text-xs sm:text-sm text-gray-500 max-w-xs mx-auto">
-            We have sent an OTP to <span className="font-semibold">{email}</span> for verification
-          </p>
-        </div>
-
-        {/* OTP Input Form */}
-        <form onSubmit={handleSubmit} className="w-full max-w-sm sm:max-w-md space-y-5 px-4">
-          
-          <div className="flex items-center justify-center gap-2 sm:gap-3">
-            {otp.map((digit, index) => {
-              const hasValue = digit !== '';
-              return (
-                <input
-                  key={index}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  ref={(el) => (inputRefs.current[index] = el)}
-                  onChange={(e) => handleChange(e, index)}
-                  onKeyDown={(e) => handleKeyDown(e, index)}
-                  onPaste={handlePaste}
-                  disabled={isLoading || isExpired}
-                  className={`w-10 h-12 sm:w-12 sm:h-14 border rounded-lg bg-white text-center text-indigo-600 font-bold text-xl sm:text-2xl focus:outline-none focus:ring-2 shadow-sm transition-colors duration-200 ${
-                    hasValue
-                      ? 'border-green-300 ring-green-100'
-                      : 'border-gray-300 focus:border-indigo-600 focus:ring-indigo-200'
-                  } ${isLoading || isExpired ? 'opacity-50 cursor-not-allowed' : ''}`}
-                />
-              );
-            })}
-          </div>
-
-          <p className={`text-center text-xs font-semibold ${isExpired ? 'text-red-600' : 'text-gray-500'}`} aria-live="polite">
-            {isExpired ? 'OTP expired. Request a new code below.' : `OTP expires in ${formattedTime}`}
-          </p>
-
-          <button
-            type="submit"
-            disabled={isLoading || isExpired || !isComplete}
-            className={`w-full py-3.5 font-semibold text-sm rounded-xl tracking-wider shadow-sm transition-colors duration-200 uppercase ${
-              isComplete && !isLoading && !isExpired
-                ? 'bg-green-300 hover:bg-green-400 text-gray-900'
-                : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white'
-            }`}
-          >
-            {isLoading ? 'VERIFYING...' : 'VERIFY OTP'}
-          </button>
-        </form>
-
-        {/* Footer Link */}
-        <div className="pt-2 border-t border-gray-100/50 text-center shrink-0 space-y-1">
-          <p className="text-xs text-gray-500">
-            Didn't Receive the OTP?
-          </p>
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={isResending}
-            className="text-xs font-semibold text-indigo-600 hover:text-indigo-500 transition-colors disabled:opacity-50"
-          >
-            {isResending ? 'RESENDING...' : 'Resend Code'}
-          </button>
-        </div>
-
       </div>
     </div>
   );

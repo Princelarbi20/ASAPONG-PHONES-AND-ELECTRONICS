@@ -5,12 +5,14 @@ import toast from 'react-hot-toast';
 import { withCsrf } from '../../lib/csrf';
 import { useDispatch } from 'react-redux';
 import { authAction } from '../../redux/store';
+import { Eye, EyeOff } from 'lucide-react';
 
 
 const ResetPassword = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [visiblePasswords, setVisiblePasswords] = useState({ current: false, new: false, confirm: false });
   const [isLoading, setIsLoading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const navigate = useNavigate();
@@ -83,8 +85,10 @@ const ResetPassword = () => {
             <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
               Current Password
             </label>
+            <div className="relative">
             <input
-              type="password"
+              type={visiblePasswords.current ? 'text' : 'password'}
+              autoComplete="current-password"
               required
               maxLength={128}
               aria-invalid={Boolean(formErrors.currentPassword)}
@@ -93,8 +97,10 @@ const ResetPassword = () => {
               onChange={(e) => { setCurrentPassword(e.target.value); setFormErrors((errors) => ({ ...errors, currentPassword: '' })); }}
               disabled={isLoading}
               placeholder="••••••••"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+              className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
             />
+            <button type="button" onClick={() => setVisiblePasswords((state) => ({ ...state, current: !state.current }))} aria-label={visiblePasswords.current ? 'Hide current password' : 'Show current password'} aria-pressed={visiblePasswords.current} className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-slate-500 hover:text-indigo-600">{visiblePasswords.current ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+            </div>
             {formErrors.currentPassword && <p className="mt-1 text-xs text-red-600">{formErrors.currentPassword}</p>}
           </div>
 
@@ -102,8 +108,10 @@ const ResetPassword = () => {
             <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
               New Password
             </label>
+            <div className="relative">
             <input
-              type="password"
+              type={visiblePasswords.new ? 'text' : 'password'}
+              autoComplete="new-password"
               required
               minLength={8}
               maxLength={128}
@@ -113,8 +121,10 @@ const ResetPassword = () => {
               onChange={(e) => { setNewPassword(e.target.value); setFormErrors((errors) => ({ ...errors, newPassword: '' })); }}
               disabled={isLoading}
               placeholder="••••••••"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+              className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
             />
+            <button type="button" onClick={() => setVisiblePasswords((state) => ({ ...state, new: !state.new }))} aria-label={visiblePasswords.new ? 'Hide new password' : 'Show new password'} aria-pressed={visiblePasswords.new} className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-slate-500 hover:text-indigo-600">{visiblePasswords.new ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+            </div>
             {formErrors.newPassword && <p className="mt-1 text-xs text-red-600">{formErrors.newPassword}</p>}
             <p className="text-[10px] text-gray-500 mt-1">
               Use 8–128 characters with uppercase, lowercase, a number, and a symbol.
@@ -125,8 +135,10 @@ const ResetPassword = () => {
             <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
               Confirm New Password
             </label>
+            <div className="relative">
             <input
-              type="password"
+              type={visiblePasswords.confirm ? 'text' : 'password'}
+              autoComplete="new-password"
               required
               maxLength={128}
               aria-invalid={Boolean(formErrors.confirmPassword)}
@@ -134,8 +146,10 @@ const ResetPassword = () => {
               onChange={(e) => { setConfirmPassword(e.target.value); setFormErrors((errors) => ({ ...errors, confirmPassword: '' })); }}
               disabled={isLoading}
               placeholder="••••••••"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+              className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl bg-white text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
             />
+            <button type="button" onClick={() => setVisiblePasswords((state) => ({ ...state, confirm: !state.confirm }))} aria-label={visiblePasswords.confirm ? 'Hide confirmation password' : 'Show confirmation password'} aria-pressed={visiblePasswords.confirm} className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-slate-500 hover:text-indigo-600">{visiblePasswords.confirm ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+            </div>
             {formErrors.confirmPassword && <p className="mt-1 text-xs text-red-600">{formErrors.confirmPassword}</p>}
           </div>
 

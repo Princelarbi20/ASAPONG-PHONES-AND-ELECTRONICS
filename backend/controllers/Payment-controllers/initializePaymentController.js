@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { Orders } from "../../modules/orderSchema.js";
 import { PaymentAttempt } from "../../modules/paymentAttemptSchema.js";
+import { Register } from "../../modules/userRegister.js";
 import { getPaystackConfig } from "../../utils/paystackConfig.js";
 
 export const initializePaymentController = async (req, res) => {
@@ -15,8 +16,8 @@ export const initializePaymentController = async (req, res) => {
       });
     }
 
-    // Populate user to get the email
-    const order = await Orders.findById(orderId).populate("user", "email");
+    // Populate the customer snapshot; retain the reference as a fallback for older orders.
+    const order = await Orders.findById(orderId).populate("user", "userName email");
 
     if (!order) {
       return res.status(404).json({
@@ -25,8 +26,8 @@ export const initializePaymentController = async (req, res) => {
       });
     }
 
-    // Ownership check
-    if (!req.user || order.user._id.toString() !== String(req.user.id || req.user._id)) {
+    const orderUserId = order.user?._id || order.user;
+    if (!orderUserId || !req.user || String(orderUserId) !== String(req.user.id || req.user._id)) {
       return res.status(403).json({
         success: false,
         message: "Forbidden.",
@@ -40,7 +41,8 @@ export const initializePaymentController = async (req, res) => {
       });
     }
 
-    const email = order.user?.email;
+    const customer = order.user?.email ? order.user : await Register.findById(orderUserId).select("userName email");
+    const email = customer?.email || order.customerEmail;
     const wholeAmount = Math.round(Number(order.totalPrice));
     if (Number.isFinite(wholeAmount) && wholeAmount !== Number(order.totalPrice)) {
       order.totalPrice = wholeAmount;
@@ -64,7 +66,10 @@ export const initializePaymentController = async (req, res) => {
 
     const reference = `ORD-${order._id}-${crypto.randomBytes(4).toString("hex")}`;
     attempt = await PaymentAttempt.create({
-      user: order.user._id,
+      customerType: order.customerType || 'REGISTERED',
+      user: orderUserId,
+      customerName: customer?.userName || order.customerName,
+      customerEmail: email,
       order: order._id,
       amount: wholeAmount,
       currency: "GHS",

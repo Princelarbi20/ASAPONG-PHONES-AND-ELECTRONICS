@@ -166,7 +166,9 @@ export default function Orders() {
 
                   // Defensive checks for ID values to prevent crashes on substring reads
                   const displayId = id ? `#${id.substring(0, 8)}` : '#N/A';
-                  const customer = order.customerName || order.user?.userName || order.user?.name || 'Guest Client';
+                  const customer = order.customerType === 'GUEST' && !order.user
+                    ? 'Guest Client'
+                    : order.customerName || order.user?.userName || order.user?.name || order.customerEmail || order.user?.email || 'Customer unavailable';
                   const amount = order.totalPrice ?? order.totalAmount ?? order.price ?? 0;
 
                   return (
@@ -237,7 +239,7 @@ export default function Orders() {
               <div className="space-y-5">
                 <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-6 shadow-sm">
                   <h4 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Customer</h4>
-                  <p className="mt-4 text-lg font-semibold text-slate-900">{selectedOrder.user?.userName || selectedOrder.customerName || 'Guest Client'}</p>
+                  <p className="mt-4 text-lg font-semibold text-slate-900">{selectedOrder.customerType === 'GUEST' && !selectedOrder.user ? 'Guest Client' : selectedOrder.customerName || selectedOrder.user?.userName || selectedOrder.user?.name || selectedOrder.customerEmail || selectedOrder.user?.email || 'Customer unavailable'}</p>
                   <p className="text-sm text-slate-500">{selectedOrder.user?.email || selectedOrder.customerEmail || ''}</p>
                   <div className="mt-4 rounded-2xl bg-white px-4 py-2 shadow-sm">
                     <DetailRow label="Phone" value={selectedOrder.user?.phone} />

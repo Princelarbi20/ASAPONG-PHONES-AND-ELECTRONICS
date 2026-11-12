@@ -94,6 +94,23 @@ test('regular user login sets access and refresh cookies and preserves the respo
   assert.equal(jwt.verify(res.cookies[0].value, process.env.ACCESS_TOKEN_SECRET).accountType, 'USER');
 });
 
+test('cookies issued by login authenticate a protected request', async (t) => {
+  const user = await makeUser();
+  stubLoginRecords(t, { user });
+  stubMethod(t, Register, 'updateOne', async () => ({ acknowledged: true }));
+  const loginResponse = makeResponse();
+  await userLoginController({ body: { email: user.email, password } }, loginResponse);
+
+  stubMethod(t, Register, 'findById', async () => user);
+  const cookies = Object.fromEntries(loginResponse.cookies.map(({ name, value }) => [name, value]));
+  const protectedResponse = makeResponse();
+  let nextCalled = false;
+  await verifyToken({ headers: {}, cookies }, protectedResponse, () => { nextCalled = true; });
+
+  assert.equal(nextCalled, true);
+  assert.equal(protectedResponse.statusCode, 200);
+});
+
 test('approved dealer login issues dealer tokens', async (t) => {
   const dealer = await makeUser({ role: 'DEALER', status: 'APPROVED', shopName: 'Test Shop' });
   stubLoginRecords(t, { dealer });

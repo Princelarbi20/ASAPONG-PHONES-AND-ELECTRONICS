@@ -55,14 +55,14 @@ export default function Products() {
       setLoading(true);
       setErrorMsg('');
 
+      const params = { page, limit: PAGE_SIZE };
+      if (selectedCategory !== 'All') params.category = selectedCategory;
+      const search = searchQuery.trim();
+      if (search) params.search = search;
+      if (brandSortOrder === 'asc' || brandSortOrder === 'desc') params.brandSort = brandSortOrder;
+
       const response = await axiosInstance.get('/get-All-product', {
-        params: {
-          page,
-          limit: PAGE_SIZE,
-          category: selectedCategory,
-          search: searchQuery.trim(),
-          brandSort: brandSortOrder,
-        },
+        params,
         signal,
       });
 
@@ -79,7 +79,10 @@ export default function Products() {
     } catch (err) {
       if (signal?.aborted || err.code === 'ERR_CANCELED') return;
       console.error('Error fetching products:', err);
-      setErrorMsg(err.response?.data?.message || 'Access Denied: Unable to fetch inventory data.');
+      const validationDetails = err.response?.data?.errors
+        ?.map(({ field, message }) => `${field}: ${message}`)
+        .join(' ');
+      setErrorMsg(validationDetails || err.response?.data?.message || 'Access Denied: Unable to fetch inventory data.');
     } finally {
       if (!signal?.aborted) setLoading(false);
     }

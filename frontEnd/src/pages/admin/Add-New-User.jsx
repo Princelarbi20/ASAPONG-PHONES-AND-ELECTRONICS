@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axiosInstance from '../../lib/axios';
+import { Eye, EyeOff } from 'lucide-react';
 
 // Get backend base URL from Vite environment variables with a fallback
 export const AddNewUser = () => {
@@ -12,6 +13,7 @@ export const AddNewUser = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -121,19 +123,23 @@ export const AddNewUser = () => {
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                 Password
               </label>
+              <div className="relative">
               <input
                 id="password"
                 name="password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
                 required
                 minLength={8}
                 maxLength={128}
                 pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,128}"
-                className="block w-full rounded-md border border-gray-300 px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm bg-gray-50/50 focus:bg-white transition-all"
+                className="block w-full rounded-md border border-gray-300 px-3 py-2.5 pr-12 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm bg-gray-50/50 focus:bg-white transition-all"
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={handleChange}
               />
+              <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-slate-500 hover:text-indigo-600">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+              </div>
             </div>
 
             {/* Role Select Field */}

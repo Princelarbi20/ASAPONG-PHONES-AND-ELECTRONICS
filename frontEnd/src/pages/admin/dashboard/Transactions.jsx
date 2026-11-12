@@ -124,8 +124,8 @@ const Transactions = () => {
                   <dl className="mt-2.5 grid min-w-0 grid-cols-2 gap-x-3 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-6">
                     <div className="min-w-0">
                       <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Customer</dt>
-                      <dd className="mt-0.5 break-words text-xs font-medium leading-4 text-slate-800">{transaction.user?.userName || 'Unknown customer'}</dd>
-                      <dd className="break-all text-[10px] leading-4 text-slate-500 sm:text-xs">{transaction.user?.email || 'No email'}</dd>
+                      <dd className="mt-0.5 break-words text-xs font-medium leading-4 text-slate-800">{transaction.customerType === 'GUEST' && !transaction.user ? 'Guest' : transaction.customerName || transaction.user?.userName || transaction.user?.name || transaction.order?.customerName || transaction.customerEmail || transaction.user?.email || transaction.order?.customerEmail || 'Customer unavailable'}</dd>
+                      <dd className="break-all text-[10px] leading-4 text-slate-500 sm:text-xs">{transaction.customerEmail || transaction.user?.email || transaction.order?.customerEmail || 'No email'}</dd>
                     </div>
                     <div className="min-w-0">
                       <dt className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Order ID</dt>

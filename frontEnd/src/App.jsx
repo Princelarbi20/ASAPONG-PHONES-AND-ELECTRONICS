@@ -21,6 +21,9 @@ const AuthLayout = lazy(() => import('./pages/auth/AuthLayout'));
 const Login = lazy(() => import('./pages/auth/Login'));
 const Register = lazy(() => import('./pages/auth/Register'));
 const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
+const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
+const VerifyResetOTP = lazy(() => import('./pages/auth/VerifyResetOTP'));
+const CreateNewPassword = lazy(() => import('./pages/auth/CreateNewPassword'));
 const PageNotFound = lazy(() => import('./component/PageNotFound'));
 const HomePage = lazy(() => import('./pages/Home-Page/HomePage'));
 const LandingPage = lazy(() => import('./pages/Home-Page/LandingPage'));
@@ -164,7 +167,10 @@ const App = () => {
           {/* FIXED: Paths are kept relative inside child routing trees (no leading slashes) */}
           <Route path="register" element={<Register />} />       
           <Route path="login" element={<Login />} />             
-          <Route path="reset-password" element={<ResetPassword />} />
+          <Route path="forgot-password" element={<ForgotPassword />} />
+          <Route path="verify-reset-otp" element={<VerifyResetOTP />} />
+          <Route path="reset-password" element={<CreateNewPassword />} />
+          <Route path="change-password" element={<ResetPassword />} />
           <Route path="otp-verify" element={<OtpVerification/>} />
         </Route>
 

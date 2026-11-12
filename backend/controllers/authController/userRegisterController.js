@@ -3,6 +3,7 @@ import { randomInt } from "crypto";
 import { Register } from "../../modules/userRegister.js";
 import sendEmail from "../../utils/nodemailer.js";
 import { escapeHtml } from "../../utils/escapeHtml.js";
+import { getOtpExpiryMs } from "../../config/otp.js";
 
 export const userRegisterController = async (req, res) => {
     try {
@@ -74,8 +75,8 @@ export const userRegisterController = async (req, res) => {
         const otp = randomInt(100000, 1000000).toString();
         const hashOtp = await bcrypt.hash(otp, 10);
         
-        // 5 Minutes Expiration Calculation
-        const otpExpires = new Date(Date.now() + 5 * 60 * 1000); 
+        const otpExpiryMs = getOtpExpiryMs();
+        const otpExpires = new Date(Date.now() + otpExpiryMs);
 
         // 4. Save New User to Database
         const newUser = new Register({
@@ -88,14 +89,14 @@ export const userRegisterController = async (req, res) => {
             isVerified: false, // User must verify OTP next
             cart: [],
             otp: hashOtp,
-            otpExpires: otpExpires
+            otpExpires
         });
 
         await newUser.save();
 
         // 5. Send Styled Verification Email
         try {
-            await sendEmail({
+            const emailResult = await sendEmail({
                 to: newUser.email,
                 subject: "Verify your account",
                 html: `
@@ -134,7 +135,7 @@ export const userRegisterController = async (req, res) => {
                 </div>
 
                 <p style="color: #6b7280; font-size: 12px; margin: 0 0 8px 0;">
-                  ⏱️ This OTP will expire in <strong style="color: #ef4444;">5 minutes</strong>.
+                  ⏱️ This OTP will expire in <strong style="color: #ef4444;">${Math.ceil(otpExpiryMs / 60000)} minutes</strong>.
                 </p>
                 <p style="color: #9ca3af; font-size: 12px; margin: 0;">
                   If you didn't request this code, you can safely ignore this email.
@@ -157,8 +158,19 @@ export const userRegisterController = async (req, res) => {
   </html>
 `
             });
+            if (!emailResult?.success) {
+                throw emailResult?.error || new Error('Verification email could not be sent.');
+            }
+            newUser.otpLastSentAt = new Date();
+            await newUser.save();
         } catch (emailError) {
             console.error("Failed to send verification email:", emailError);
+            return res.status(503).json({
+                success: false,
+                message: "Your account was created, but the verification email could not be sent. Please try resending the OTP shortly.",
+                otpExpiresAt: otpExpires.toISOString(),
+                user: { email: newUser.email }
+            });
         }
 
         // 6. Return Successful Response

@@ -65,6 +65,10 @@ const userRegisterSchema = new mongoose.Schema({
     otpExpires: { // Fixed: Corrected typo from otpEpires to otpExpires
         type: Date
     },
+    otpLastSentAt: {
+        type: Date,
+        default: null
+    },
     cart: [
         {
             productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },

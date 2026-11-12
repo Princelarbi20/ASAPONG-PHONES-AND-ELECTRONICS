@@ -7,6 +7,35 @@ const ORDER_STATUSES = ["PENDING", "CONFIRMED", "PROCESSING", "PACKED", "SHIPPED
 const PAYMENT_STATUSES = ["PENDING", "PAID", "FAILED", "ABANDONED", "REVERSED"];
 const SORT_FIELDS = { date: "createdAt", id: "_id", amount: "totalPrice", status: "status", paymentStatus: "paymentStatus" };
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const attachOrderUsers = async (orders) => {
+  const unresolvedOrders = orders.filter((order) => !order.user?.userName && order.customerType !== "GUEST");
+  const missingUserIds = [...new Set(unresolvedOrders
+    .map((order) => order.user?._id || order.user?.id || order.userId || order.user)
+    .filter((id) => mongoose.isValidObjectId(id))
+    .map(String))];
+  const customerEmails = [...new Set(unresolvedOrders
+    .map((order) => order.customerEmail || order.user?.email || (typeof order.user === 'string' && order.user.includes('@') ? order.user : null))
+    .filter((email) => typeof email === 'string' && email.includes('@'))
+    .map((email) => email.trim().toLowerCase()))];
+  if (!missingUserIds.length && !customerEmails.length) return orders;
+
+  const lookup = [];
+  if (missingUserIds.length) lookup.push({ _id: { $in: missingUserIds } });
+  if (customerEmails.length) lookup.push({ email: { $in: customerEmails } });
+  const users = await Register.find({ $or: lookup }).select("userName email phone").lean();
+  const usersById = new Map(users.map((user) => [String(user._id), user]));
+  const usersByEmail = new Map(users.map((user) => [String(user.email || '').toLowerCase(), user]));
+  return orders.map((order) => {
+    const userId = order.user?._id || order.user?.id || order.userId || order.user;
+    const customerEmail = order.customerEmail || order.user?.email || (typeof order.user === 'string' && order.user.includes('@') ? order.user : null);
+    const fetchedUser = usersById.get(String(userId)) || usersByEmail.get(String(customerEmail || '').trim().toLowerCase());
+    if (!fetchedUser) return order;
+    order.user = typeof order.user === "object" && order.user !== null
+      ? { ...fetchedUser, ...order.user, userName: order.user.userName || fetchedUser.userName }
+      : fetchedUser;
+    return order;
+  });
+};
 const parseDate = (value, name, res) => {
   if (value === undefined || value === "") return null;
   const date = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00.000Z`) : null;
@@ -54,6 +83,7 @@ export const getAllOrdersController = async (req, res, next) => {
       const searchOr = [
         { "paymentDetails.reference": regex }, { "paymentDetails.transactionId": regex },
         { status: regex }, { paymentStatus: regex },
+        { customerName: regex }, { customerEmail: regex },
       ];
       if (/^\d+$/.test(term)) searchOr.push({ orderNumber: Number(term) });
       if (mongoose.isValidObjectId(term)) searchOr.push({ _id: term });
@@ -81,6 +111,13 @@ export const getAllOrdersController = async (req, res, next) => {
         Orders.countDocuments(filter),
       ]);
     }
+
+    orders = await attachOrderUsers(orders);
+    orders = orders.map((order) => {
+      if (order.customerType === "GUEST" && !order.user) order.customerName ||= "Guest";
+      else if (!order.customerName && order.user?.userName) order.customerName = order.user.userName;
+      return order;
+    });
 
     const paymentMethods = await Orders.distinct("paymentDetails.channel");
 

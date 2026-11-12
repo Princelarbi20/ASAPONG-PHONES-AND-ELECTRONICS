@@ -14,6 +14,7 @@ const initialState = { email: '', password: '' }
 const Login = () => {
   const [formData, setFormData] = useState(initialState)
   const [isLoading, setIsLoading] = useState(false)
+  const [failedLoginAttempts, setFailedLoginAttempts] = useState(0)
   const dispatch = useDispatch()
   const navigate = useNavigate()
 
@@ -37,6 +38,7 @@ const Login = () => {
       const baseConfig = await withCsrf({ withCredentials: true });
       const response = await axiosInstance.post('/user-login', formData, baseConfig);
       const { user, accountType } = response.data;
+      setFailedLoginAttempts(0);
 
       // 3. Persist display data in Redux (JWT remains stored in HttpOnly cookie)
       dispatch(authAction.login({ user, role: user?.role, accountType }));
@@ -55,6 +57,9 @@ const Login = () => {
     } catch (error) {
       // Extract backend response error message
       const serverMessage = error.response?.data?.message || 'Login failed. Please try again.';
+      if (error.response?.status === 401) {
+        setFailedLoginAttempts((attempts) => attempts + 1);
+      }
 
       // Unverified accounts must complete OTP verification before they can log in.
       if (error.response?.status === 403 && error.response?.data?.isVerified === false) {
@@ -98,6 +103,14 @@ const Login = () => {
             onSubmit={handleSubmit}
             buttonText={isLoading ? 'Signing in...' : 'Sign In'}
           />
+          {failedLoginAttempts >= 3 && (
+            <p className="mt-3 text-center text-sm text-slate-600">
+              Forgotten password?{' '}
+              <Link to="/auth/forgot-password" className="font-semibold text-indigo-600 underline underline-offset-2 hover:text-indigo-700">
+                Reset it here
+              </Link>
+            </p>
+          )}
         </div>
 
         <div className="pt-2 border-t border-gray-100 text-center shrink-0 space-y-1.5">
@@ -105,11 +118,6 @@ const Login = () => {
             Don't have an account?{' '}
             <Link to="/auth/register" className="font-semibold text-indigo-600 hover:text-indigo-500 transition-colors duration-200 underline underline-offset-4 decoration-indigo-200 hover:decoration-indigo-500">
               Create one
-            </Link>
-          </p>
-          <p className="text-xs text-gray-400">
-            <Link to="/auth/reset-password" className="font-medium text-slate-500 hover:text-indigo-600 transition-colors duration-200">
-              Forgot password?
             </Link>
           </p>
         </div>

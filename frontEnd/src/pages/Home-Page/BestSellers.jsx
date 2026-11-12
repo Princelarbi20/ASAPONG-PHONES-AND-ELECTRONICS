@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
-import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios';
+import { resolveApiAssetUrl } from '@/lib/axios';
+import { getProducts } from '@/lib/productApi';
 import { useNavigate } from "react-router-dom";
 import { formatPrice } from '@/lib/utils';
 import SectionTitle from '@/component/SectionTitle';
@@ -34,7 +35,7 @@ const BestSellers = ({ from, end, position }) => {
   const fetchProduct = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await axiosInstance.get('/get-All-product');
+      const { data } = await getProducts();
 
       let allProducts = [];
       if (data && Array.isArray(data.products)) {
