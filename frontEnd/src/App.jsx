@@ -1,22 +1,37 @@
+
 import { Routes, Route } from 'react-router-dom';
-import React, { lazy, Suspense, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Toaster } from 'react-hot-toast'; 
+import { Toaster } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
+
 import axiosInstance from './lib/axios';
 import { authAction } from './redux/store';
-
-// Keep the session/auth guard small and load each route's page only when visited.
 import CheckAuth from './Data/CheckAuth';
+
+// Admin pages
 const AdminLayout = lazy(() => import('./pages/admin/dashboard/DashboardLayout'));
 const Dashboard = lazy(() => import('./pages/admin/dashboard/AdminDashboard'));
 const Transactions = lazy(() => import('./pages/admin/dashboard/Transactions'));
 const Products = lazy(() => import('./pages/admin/Products'));
 const Orders = lazy(() => import('./pages/admin/Orders'));
 const Users = lazy(() => import('./pages/admin/Users'));
-const AddNewUser = lazy(() => import('./pages/admin/Add-New-User').then((module) => ({ default: module.AddNewUser })));
+
+const AddNewUser = lazy(() =>
+  import('./pages/admin/Add-New-User').then((module) => ({
+    default: module.AddNewUser,
+  }))
+);
+
 const ShopRequests = lazy(() => import('./pages/admin/ShopRequests'));
-const RegisteredShops = lazy(() => import('./pages/admin/RegisterdShops').then((module) => ({ default: module.RegisteredShops })));
+
+const RegisteredShops = lazy(() =>
+  import('./pages/admin/RegisterdShops').then((module) => ({
+    default: module.RegisteredShops,
+  }))
+);
+
+// Authentication pages
 const AuthLayout = lazy(() => import('./pages/auth/AuthLayout'));
 const Login = lazy(() => import('./pages/auth/Login'));
 const Register = lazy(() => import('./pages/auth/Register'));
@@ -24,10 +39,13 @@ const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
 const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
 const VerifyResetOTP = lazy(() => import('./pages/auth/VerifyResetOTP'));
 const CreateNewPassword = lazy(() => import('./pages/auth/CreateNewPassword'));
+const OtpVerification = lazy(() => import('./pages/auth/OtpVerification'));
+
+// Public pages
 const PageNotFound = lazy(() => import('./component/PageNotFound'));
 const HomePage = lazy(() => import('./pages/Home-Page/HomePage'));
 const LandingPage = lazy(() => import('./pages/Home-Page/LandingPage'));
-const Cart = lazy(() => import('./pages/USER/Cart'));
+
 const Phones = lazy(() => import('./pages/Home-Page/PhonesCategrory'));
 const Laptops = lazy(() => import('./pages/Home-Page/LaptopsCategrory'));
 const Fridge = lazy(() => import('./pages/Home-Page/FridgeCategrory'));
@@ -37,56 +55,96 @@ const Accessories = lazy(() => import('./pages/Home-Page/AccessoriesCategrory'))
 const Appliances = lazy(() => import('./pages/Home-Page/AppliancesCategrory'));
 const AirConditions = lazy(() => import('./pages/Home-Page/AirConditionsCategrory'));
 const WashingMachines = lazy(() => import('./pages/Home-Page/WashingMachinesCategrory'));
+
+const ProductDetail = lazy(() => import('./component/ProductDetail'));
+
+// Customer pages
+const Cart = lazy(() => import('./pages/USER/Cart'));
 const Checkout = lazy(() => import('./pages/USER/Checkout'));
 const MyOrders = lazy(() => import('./pages/USER/MyOrders'));
 const PaymentSuccess = lazy(() => import('./pages/USER/PaymentSuccess'));
-const ProductDetail = lazy(() => import('./component/ProductDetail'));
+
+// Dealer pages
 const ShopRegister = lazy(() => import('./pages/DELLEAR/ShopRegister'));
 const DellearLayout = lazy(() => import('./pages/DELLEAR/DellearLayout'));
-const OtpVerification = lazy(() => import('./pages/auth/OtpVerification'));
 
+// Lazy loading fallback
 const RouteLoading = () => (
-  <div className="flex min-h-screen items-center justify-center bg-slate-50" role="status" aria-label="Loading page">
+  <div
+    className="flex min-h-screen items-center justify-center bg-slate-50"
+    role="status"
+    aria-label="Loading page"
+  >
     <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
   </div>
 );
 
-
 const App = () => {
   const dispatch = useDispatch();
-  const isAuthenticated = useSelector((state) => state.auth.isLogin);
-  const user = useSelector((state) => state.auth.user);
-  const [sessionReady, setSessionReady] = useState(false);
 
+  const isAuthenticated = useSelector(
+    (state) => state.auth.isLogin
+  );
+
+  const user = useSelector(
+    (state) => state.auth.user
+  );
+
+  const sessionStatus = useSelector(
+    (state) => state.auth.sessionStatus
+  );
+
+  // Restore the existing login session in the background.
   useEffect(() => {
     let active = true;
-    axiosInstance.get('/auth/session')
-      .then(({ data }) => {
-        if (active && data?.success && data.user) {
-          dispatch(authAction.login({ user: data.user, role: data.user.role, accountType: data.accountType }));
+
+    dispatch(authAction.sessionCheckStarted());
+
+    const restoreSession = async () => {
+      try {
+        const { data } = await axiosInstance.get('/auth/session');
+
+        if (!active) return;
+
+        if (data?.success && data?.user) {
+          dispatch(
+            authAction.sessionCheckSucceeded({
+              user: {
+                ...data.user,
+                role: data.user.role || data.accountType || null,
+              },
+            })
+          );
+        } else {
+          dispatch(authAction.sessionCheckFailed());
         }
-      })
-      .catch(() => {
-        // No valid server session is a normal state for logged-out visitors.
-      })
-      .finally(() => {
-        if (active) setSessionReady(true);
-      });
+      } catch (error) {
+        if (!active) return;
 
-    return () => { active = false; };
+        const status = error.response?.status;
+
+        // No valid login session is a normal situation.
+        if (status === 401 || status === 403) {
+          dispatch(authAction.sessionCheckFailed());
+        } else {
+          // Network or server errors should not be treated
+          // as proof that the visitor is logged out.
+          dispatch(authAction.sessionCheckError());
+          console.error('Session restoration failed:', error);
+        }
+      }
+    };
+
+    restoreSession();
+
+    return () => {
+      active = false;
+    };
   }, [dispatch]);
-
-  if (!sessionReady) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50" role="status" aria-label="Restoring your session">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-      </div>
-    );
-  }
 
   return (
     <>
-      {/* Global alert toaster layout overlay panel */}
+      {/* Global notification toaster */}
       <Toaster
         position="top-center"
         reverseOrder={false}
@@ -102,7 +160,8 @@ const App = () => {
             boxShadow: '0 24px 80px rgba(22, 163, 74, 0.22)',
             border: '1px solid rgba(255, 255, 255, 0.16)',
             padding: '1rem 1.2rem',
-            fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            fontFamily:
+              'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
           },
           success: {
             style: {
@@ -118,99 +177,179 @@ const App = () => {
       />
 
       <Suspense fallback={<RouteLoading />}>
-      <Routes>
-        
-        {/* =========================================================
-            1. PUBLIC CUSTOMER LAYOUT & PRODUCT DISCOVERY
-           ========================================================= */}
-        <Route path="/" element={<HomePage />}>
-          <Route index element={<LandingPage />} />
-          <Route path='phones' element={<Phones />}/>
-          <Route path='laptops' element={<Laptops />}/>
-          <Route path='fridge' element={<Fridge />}/>
-          <Route path='television' element={<Television />}/>
-          <Route path='speakers' element={<Speakers />}/>
-          <Route path='accessories' element={<Accessories />}/>
-          <Route path='appliances' element={<Appliances />}/>
-          <Route path='air-conditions' element={<AirConditions />}/>
-          <Route path='washing-machines' element={<WashingMachines />}/>
-          <Route path='product-details/:id' element={<ProductDetail />} />
-          
-          {/* PROTECTED CUSTOMER USER BOUNDARIES (Nested under Main Header Layout) */}
-          <Route path="cart" element={
-            <CheckAuth isAuthenticated={isAuthenticated} user={user}>
-              <Cart />
-            </CheckAuth>
-          } />
-          <Route path="checkout" element={
-            <CheckAuth isAuthenticated={isAuthenticated} user={user}>
-              <Checkout />
-            </CheckAuth>
-          } />
-          <Route path="my-orders" element={
-            <CheckAuth isAuthenticated={isAuthenticated} user={user}>
-              <MyOrders />
-            </CheckAuth>
-          } />
-          <Route path="payment-success" element={
-            <CheckAuth isAuthenticated={isAuthenticated} user={user}>
-              <PaymentSuccess />
-            </CheckAuth>
-          } />
-        </Route> 
+        <Routes>
 
-        {/* Public Merchant Onboarding Route */}
-        <Route path="/register-store" element={<ShopRegister />} />
-        
-        
-        <Route path="/auth" element={ 
-          <CheckAuth isAuthenticated={isAuthenticated} user={user}>
-            <AuthLayout />
-          </CheckAuth>
-        }>
-          {/* FIXED: Paths are kept relative inside child routing trees (no leading slashes) */}
-          <Route path="register" element={<Register />} />       
-          <Route path="login" element={<Login />} />             
-          <Route path="forgot-password" element={<ForgotPassword />} />
-          <Route path="verify-reset-otp" element={<VerifyResetOTP />} />
-          <Route path="reset-password" element={<CreateNewPassword />} />
-          <Route path="change-password" element={<ResetPassword />} />
-          <Route path="otp-verify" element={<OtpVerification/>} />
-        </Route>
+          {/* =========================================
+              1. PUBLIC CUSTOMER PAGES
+          ========================================= */}
 
-        {/* 
-            3. PROTECTED ADMIN WORKSPACE (Role Authenticated)
-          */}
-        <Route path="/admin" element={
-          <CheckAuth isAuthenticated={isAuthenticated} user={user}>
-            <AdminLayout />
-          </CheckAuth> 
-        }>
-          <Route index element={<Dashboard />} />       
-          <Route path="products" element={<Products />} />     
-          <Route path="orders" element={<Orders />} />         
-          <Route path="transactions" element={<Transactions />} />
-          <Route path="users" element={<Users />} />           
-          <Route path="add-user" element={<AddNewUser />} />
-          <Route path="shop-request" element={<ShopRequests />} />
-          <Route path="registered-shops" element={<RegisteredShops />} />
-        </Route>
+          <Route path="/" element={<HomePage />}>
+            <Route index element={<LandingPage />} />
 
-        {/* =========================================================
-            4. PROTECTED MERCHANT DEALER WORKSPACE (Role Authenticated)
-           ========================================================= */}
-        <Route path="/dealer" element={
-           <CheckAuth isAuthenticated={isAuthenticated} user={user}>
-            <DellearLayout />
-           </CheckAuth>
-        }>
-          <Route index element={<div>Dealer Dashboard Overview</div>} />
-        </Route>
+            <Route path="phones" element={<Phones />} />
+            <Route path="laptops" element={<Laptops />} />
+            <Route path="fridge" element={<Fridge />} />
+            <Route path="television" element={<Television />} />
+            <Route path="speakers" element={<Speakers />} />
+            <Route path="accessories" element={<Accessories />} />
+            <Route path="appliances" element={<Appliances />} />
+            <Route path="air-conditions" element={<AirConditions />} />
+            <Route path="washing-machines" element={<WashingMachines />} />
 
-        {/* Catch-all Routing Exception Handlers */}
-        <Route path="*" element={<PageNotFound />} />
-      
-      </Routes>
+            <Route
+              path="product-details/:id"
+              element={<ProductDetail />}
+            />
+
+            {/* =========================================
+                2. PROTECTED CUSTOMER PAGES
+            ========================================= */}
+
+            <Route
+              path="cart"
+              element={
+                <CheckAuth
+                  isAuthenticated={isAuthenticated}
+                  user={user}
+                  sessionStatus={sessionStatus}
+                >
+                  <Cart />
+                </CheckAuth>
+              }
+            />
+
+            <Route
+              path="checkout"
+              element={
+                <CheckAuth
+                  isAuthenticated={isAuthenticated}
+                  user={user}
+                  sessionStatus={sessionStatus}
+                >
+                  <Checkout />
+                </CheckAuth>
+              }
+            />
+
+            <Route
+              path="my-orders"
+              element={
+                <CheckAuth
+                  isAuthenticated={isAuthenticated}
+                  user={user}
+                  sessionStatus={sessionStatus}
+                >
+                  <MyOrders />
+                </CheckAuth>
+              }
+            />
+
+            <Route
+              path="payment-success"
+              element={
+                <CheckAuth
+                  isAuthenticated={isAuthenticated}
+                  user={user}
+                  sessionStatus={sessionStatus}
+                >
+                  <PaymentSuccess />
+                </CheckAuth>
+              }
+            />
+          </Route>
+
+          {/* =========================================
+              3. PUBLIC SHOP REGISTRATION
+          ========================================= */}
+
+          <Route
+            path="/register-store"
+            element={<ShopRegister />}
+          />
+
+          {/* =========================================
+              4. AUTHENTICATION PAGES
+          ========================================= */}
+
+          <Route
+            path="/auth"
+            element={
+              <CheckAuth
+                isAuthenticated={isAuthenticated}
+                user={user}
+                sessionStatus={sessionStatus}
+              >
+                <AuthLayout />
+              </CheckAuth>
+            }
+          >
+            <Route path="register" element={<Register />} />
+            <Route path="login" element={<Login />} />
+            <Route path="forgot-password" element={<ForgotPassword />} />
+            <Route path="verify-reset-otp" element={<VerifyResetOTP />} />
+            <Route path="reset-password" element={<CreateNewPassword />} />
+            <Route path="change-password" element={<ResetPassword />} />
+            <Route path="otp-verify" element={<OtpVerification />} />
+          </Route>
+
+          {/* =========================================
+              5. PROTECTED ADMIN WORKSPACE
+          ========================================= */}
+
+          <Route
+            path="/admin"
+            element={
+              <CheckAuth
+                isAuthenticated={isAuthenticated}
+                user={user}
+                sessionStatus={sessionStatus}
+              >
+                <AdminLayout />
+              </CheckAuth>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="products" element={<Products />} />
+            <Route path="orders" element={<Orders />} />
+            <Route path="transactions" element={<Transactions />} />
+            <Route path="users" element={<Users />} />
+            <Route path="add-user" element={<AddNewUser />} />
+            <Route path="shop-request" element={<ShopRequests />} />
+            <Route path="registered-shops" element={<RegisteredShops />} />
+          </Route>
+
+          {/* =========================================
+              6. PROTECTED DEALER WORKSPACE
+          ========================================= */}
+
+          <Route
+            path="/dealer"
+            element={
+              <CheckAuth
+                isAuthenticated={isAuthenticated}
+                user={user}
+                sessionStatus={sessionStatus}
+              >
+                <DellearLayout />
+              </CheckAuth>
+            }
+          >
+            <Route
+              index
+              element={<div>Dealer Dashboard Overview</div>}
+            />
+          </Route>
+
+          {/* =========================================
+              7. CATCH-ALL ROUTE
+          ========================================= */}
+
+          <Route
+            path="*"
+            element={<PageNotFound />}
+          />
+
+        </Routes>
       </Suspense>
     </>
   );

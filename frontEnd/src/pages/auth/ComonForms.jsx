@@ -105,8 +105,8 @@ export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit,
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-6">
-      <div className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} noValidate className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:gap-4">
         {formControl.map((controlItem) => {
           const labelText = controlItem.label || controlItem.Label;
 
@@ -114,7 +114,7 @@ export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit,
             <div className="flex flex-col w-full gap-1.5" key={controlItem.name}>
               {/* FIXED: Swapped out custom component for a robust, styled HTML label */}
               {labelText && (
-                <label htmlFor={controlItem.name} className="block text-sm font-semibold text-gray-700">
+                <label htmlFor={controlItem.name} className="block text-xs sm:text-sm font-semibold text-gray-700">
                   {labelText}
                 </label>
               )}

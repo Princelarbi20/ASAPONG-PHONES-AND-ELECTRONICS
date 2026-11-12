@@ -83,11 +83,11 @@ const Login = () => {
   }
 
   return (
-    <div className="h-screen w-full bg-transparent flex items-center justify-center p-0">
-      <div className="w-full h-full flex flex-col justify-center space-y-3 overflow-hidden bg-white/10 border border-slate-200/20 p-6 shadow-lg backdrop-blur-sm">
+    <div className="min-h-screen min-h-[100dvh] w-full bg-transparent flex items-center justify-center p-3 sm:p-6">
+      <div className="w-full max-w-md min-h-0 flex flex-col justify-center space-y-4 overflow-y-auto bg-white/10 border border-slate-200/20 rounded-2xl p-4 sm:p-6 lg:p-8 shadow-lg backdrop-blur-sm">
         <div className="text-center shrink-0">
           <ShopName />
-          <h2 className="text-xl font-extrabold text-gray-900 tracking-tight leading-none">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight leading-tight">
             Sign in to your
           </h2>
           <p className="text-[11px] text-gray-400 mt-0.5">
@@ -95,7 +95,7 @@ const Login = () => {
           </p>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-hidden py-1">
+        <div className="min-h-0 py-1">
           <CommonForms
             formControl={loginFormController}
             formData={formData}
@@ -117,7 +117,7 @@ const Login = () => {
           <p className="text-xs text-gray-400">
             Don't have an account?{' '}
             <Link to="/auth/register" className="font-semibold text-indigo-600 hover:text-indigo-500 transition-colors duration-200 underline underline-offset-4 decoration-indigo-200 hover:decoration-indigo-500">
-              Create one
+              Create an account
             </Link>
           </p>
         </div>

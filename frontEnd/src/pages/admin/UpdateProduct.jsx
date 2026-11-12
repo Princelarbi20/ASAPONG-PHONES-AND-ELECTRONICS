@@ -202,7 +202,7 @@ export default function UpdateProduct({ productToEdit, product, onClose, onRefre
     : (CATEGORY_CONFIG[formData.category]?.fields || []);
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4 select-none">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4 select-none">
 
       {/* Dynamic styling tags loaded to instantly hide any visual scrollbars completely */}
       <style dangerouslySetInnerHTML={{
@@ -211,7 +211,7 @@ export default function UpdateProduct({ productToEdit, product, onClose, onRefre
         .no-scrollbar { scrollbar-width: none !important; -ms-overflow-style: none !important; }
       `}} />
 
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 relative max-h-[90vh] overflow-y-auto no-scrollbar">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-4 sm:p-6 relative max-h-[calc(100dvh-1rem)] sm:max-h-[90dvh] overflow-y-auto overscroll-contain no-scrollbar">
         <button
           onClick={() => onClose()}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 cursor-pointer focus:outline-none"
@@ -242,7 +242,7 @@ export default function UpdateProduct({ productToEdit, product, onClose, onRefre
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Category</label>
               <select
@@ -274,7 +274,7 @@ export default function UpdateProduct({ productToEdit, product, onClose, onRefre
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Price (GH₵)</label>
               <input
@@ -345,7 +345,7 @@ export default function UpdateProduct({ productToEdit, product, onClose, onRefre
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide border-b pb-1 mb-2">
               Advanced Technical Specs ({formData.category})
             </label>
-            <div className="grid grid-cols-2 gap-3 max-h-40 overflow-y-auto no-scrollbar bg-slate-50/50 p-3 rounded-lg border border-slate-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto overscroll-contain no-scrollbar bg-slate-50/50 p-3 rounded-lg border border-slate-100">
               {currentFields.map((field) => (
                 <div key={field} className="flex flex-col">
                   <label className="text-[10px] font-bold text-gray-500 mb-0.5">{field}</label>

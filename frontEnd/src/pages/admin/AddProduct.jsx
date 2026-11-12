@@ -307,14 +307,14 @@ export default function AddProduct({ onClose, onRefresh, productToEdit }) {
     : (CATEGORY_CONFIG[formData.category]?.fields || []);
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end select-none">
+    <div className="fixed inset-0 z-50 flex justify-end select-none overflow-hidden">
       <div
         className={`fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ease-in-out ${isRendered ? 'opacity-100' : 'opacity-0'}`}
         onClick={handleClosePanel}
       />
 
       <div
-        className={`relative lg:w-[35%] md:w-[50%] w-[90vw] bg-slate-900 border-l border-slate-800 text-white h-screen shadow-2xl flex flex-col p-6 z-10 transform transition-transform duration-300 ease-out ${isRendered ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`relative w-full sm:w-[min(92vw,42rem)] lg:w-[35%] bg-slate-900 border-l border-slate-800 text-white h-[100dvh] shadow-2xl flex flex-col p-4 sm:p-6 z-10 transform transition-transform duration-300 ease-out ${isRendered ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <button
           type="button"
@@ -325,8 +325,8 @@ export default function AddProduct({ onClose, onRefresh, productToEdit }) {
           <X className="w-5 h-5" />
         </button>
 
-        <div className="mb-6 shrink-0">
-          <h3 className="text-xl font-bold text-white tracking-tight">
+        <div className="mb-4 sm:mb-6 shrink-0 pr-8">
+          <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">
             {isEditMode ? 'Modify Item Specifications' : 'Create New Product'}
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
@@ -342,7 +342,7 @@ export default function AddProduct({ onClose, onRefresh, productToEdit }) {
 
         <form
           onSubmit={handleSubmit}
-          className="flex-1 overflow-y-auto pr-1 pb-6 space-y-6 custom-sidebar-scrollbar"
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1 pb-6 space-y-4 sm:space-y-6 custom-sidebar-scrollbar"
         >
           <style dangerouslySetInnerHTML={{
             __html: `
@@ -376,7 +376,7 @@ export default function AddProduct({ onClose, onRefresh, productToEdit }) {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Category</label>
                 <select
@@ -406,7 +406,7 @@ export default function AddProduct({ onClose, onRefresh, productToEdit }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Price (GH₵)</label>
                 <input
