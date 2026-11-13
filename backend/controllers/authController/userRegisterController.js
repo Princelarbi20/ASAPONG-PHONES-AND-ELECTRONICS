@@ -4,8 +4,25 @@ import { Register } from "../../modules/userRegister.js";
 import sendEmail from "../../utils/nodemailer.js";
 import { escapeHtml } from "../../utils/escapeHtml.js";
 import { getOtpExpiryMs } from "../../config/otp.js";
+import { performance } from "node:perf_hooks";
 
 export const userRegisterController = async (req, res) => {
+    const requestStartedAt = performance.now();
+    const timings = {};
+    const measure = async (name, operation) => {
+        const startedAt = performance.now();
+        try {
+            return await operation();
+        } finally {
+            timings[name] = Number((performance.now() - startedAt).toFixed(1));
+        }
+    };
+    const logPerformance = (result) => console.info('[performance] registration', JSON.stringify({
+        result,
+        ...timings,
+        totalMs: Number((performance.now() - requestStartedAt).toFixed(1)),
+    }));
+
     try {
         const { userName, email, phone, password } = req.body;
 
@@ -55,25 +72,16 @@ export const userRegisterController = async (req, res) => {
             });
         }
 
-        // 2. Duplicate Account Check
-        const existingUser = await Register.findOne({
-            $or: [{ email: normalizedEmail }, { phone: cleanPhone }]
-        });
-
-        if (existingUser) {
-            const isEmailConflict = existingUser.email === normalizedEmail;
-            return res.status(409).json({
-                success: false,
-                message: isEmailConflict 
-                    ? "This email address is already registered." 
-                    : "This phone number is already registered."
-            });
-        }
-
-        // 3. Hash Password & Generate Secure OTP
-        const hashedPassword = await bcrypt.hash(password, 10);
+        // Mongo's unique email and phone indexes make creation atomic and
+        // prevent races, so a preliminary duplicate lookup is unnecessary.
+        // 2. Hash the password and OTP concurrently; both use the same cost.
+        const otpGenerationStartedAt = performance.now();
         const otp = randomInt(100000, 1000000).toString();
-        const hashOtp = await bcrypt.hash(otp, 10);
+        timings.otpGenerationMs = Number((performance.now() - otpGenerationStartedAt).toFixed(1));
+        const [hashedPassword, hashOtp] = await Promise.all([
+            measure('passwordHashMs', () => bcrypt.hash(password, 10)),
+            measure('otpHashMs', () => bcrypt.hash(otp, 10)),
+        ]);
         
         const otpExpiryMs = getOtpExpiryMs();
         const otpExpires = new Date(Date.now() + otpExpiryMs);
@@ -92,11 +100,11 @@ export const userRegisterController = async (req, res) => {
             otpExpires
         });
 
-        await newUser.save();
+        await measure('databaseCreateMs', () => newUser.save());
 
         // 5. Send Styled Verification Email
         try {
-            const emailResult = await sendEmail({
+            const emailResult = await measure('emailDeliveryMs', () => sendEmail({
                 to: newUser.email,
                 subject: "Verify your account",
                 html: `
@@ -157,14 +165,15 @@ export const userRegisterController = async (req, res) => {
   </body>
   </html>
 `
-            });
+            }));
             if (!emailResult?.success) {
                 throw emailResult?.error || new Error('Verification email could not be sent.');
             }
             newUser.otpLastSentAt = new Date();
-            await newUser.save();
+            await measure('databaseDeliveryReceiptMs', () => newUser.save());
         } catch (emailError) {
-            console.error("Failed to send verification email:", emailError);
+            console.error("Failed to send verification email:", emailError?.message || 'Email delivery failed.');
+            logPerformance('email_failed');
             return res.status(503).json({
                 success: false,
                 message: "Your account was created, but the verification email could not be sent. Please try resending the OTP shortly.",
@@ -174,6 +183,7 @@ export const userRegisterController = async (req, res) => {
         }
 
         // 6. Return Successful Response
+        logPerformance('created');
         return res.status(201).json({
             success: true,
             message: "Registration successful. Please verify the OTP sent to your email.",
@@ -191,10 +201,12 @@ export const userRegisterController = async (req, res) => {
 
     } catch (error) {
         if (error?.code === 11000) {
-            const field = Object.keys(error.keyPattern || {})[0];
+            const field = Object.keys(error.keyPattern || error.keyValue || {})[0];
+            logPerformance('duplicate');
             return res.status(409).json({ success: false, message: field === 'phone' ? 'This phone number is already registered.' : 'This email address is already registered.' });
         }
-        console.error("User Registration Error:", error);
+        console.error("User Registration Error:", error?.message || 'Registration failed.');
+        logPerformance('failed');
         return res.status(500).json({
             success: false,
             message: "Internal server error during registration."

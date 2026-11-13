@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import axiosInstance from '../../lib/axios';
 import toast from 'react-hot-toast';
 import { withCsrf } from '../../lib/csrf';
+import { authAction } from '../../redux/store';
 
 
 const OtpVerification = () => {
@@ -16,6 +18,7 @@ const OtpVerification = () => {
   const inputRefs = useRef([]);
   const location = useLocation();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   // Get email from navigation state
   const email = location.state?.email;
@@ -100,11 +103,10 @@ const OtpVerification = () => {
       const response = await axiosInstance.post('/verify-otp', { email, otp: finalOtp }, config);
 
       if (response.data.success) {
-        toast.success('✓ Email verified successfully!');
-        // Redirect to home page after 1.5 seconds
-        setTimeout(() => {
-          navigate('/');
-        }, 1500);
+        const user = response.data.user;
+        dispatch(authAction.login({ user, role: user?.role, accountType: response.data.accountType }));
+        toast.success('Email verified successfully! You are now signed in.');
+        navigate('/', { replace: true });
       }
     } catch (error) {
       const errorMessage = error.response?.data?.message || 'OTP verification failed. Please try again.';

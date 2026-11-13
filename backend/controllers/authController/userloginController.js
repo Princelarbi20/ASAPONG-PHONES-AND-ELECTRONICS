@@ -1,8 +1,7 @@
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { Register } from "../../modules/userRegister.js";
 import { ShopRequest } from "../../modules/shopRequestSchema.js";
-import { setAuthCookies } from "../../utils/authCookies.js";
+import { issueAuthTokens } from "../../utils/issueAuthTokens.js";
 
 const verifyPassword = async (password, passwordHash) => {
     if (typeof passwordHash !== "string" || !passwordHash.startsWith("$2")) return false;
@@ -111,31 +110,7 @@ export const userLoginController = async (req, res) => {
             }
 
             // Generate Tokens
-            const token = jwt.sign(
-                {
-                    id: String(regularUser._id),
-                    email: regularUser.email,
-                    role: regularUser.role,
-                    accountType: "USER",
-                    ver: regularUser.tokenVersion || 0,
-                },
-                process.env.ACCESS_TOKEN_SECRET,
-                { expiresIn: process.env.ACCESS_TOKEN_EXPIRE }
-            );
-
-            const refreshToken = jwt.sign(
-                {
-                    id: String(regularUser._id),
-                    email: regularUser.email,
-                    role: regularUser.role,
-                    accountType: "USER",
-                    ver: regularUser.tokenVersion || 0,
-                },
-                process.env.REFRESH_TOKEN_SECRET,
-                { expiresIn: process.env.REFRESH_TOKEN_EXPIRE }
-            );
-
-            setAuthCookies(res, token, refreshToken);
+            issueAuthTokens(res, regularUser, "USER");
 
             return res.status(200).json({
                 success: true,
@@ -204,31 +179,7 @@ export const userLoginController = async (req, res) => {
                 });
             }
 
-            const token = jwt.sign(
-                {
-                    id: String(shopUser._id),
-                    email: shopUser.email,
-                    role: shopUser.role,
-                    accountType: "DEALER",
-                    ver: shopUser.tokenVersion || 0,
-                },
-                process.env.ACCESS_TOKEN_SECRET,
-                { expiresIn: process.env.ACCESS_TOKEN_EXPIRE }
-            );
-
-            const refreshToken = jwt.sign(
-                {
-                    id: String(shopUser._id),
-                    email: shopUser.email,
-                    role: shopUser.role,
-                    accountType: "DEALER",
-                    ver: shopUser.tokenVersion || 0,
-                },
-                process.env.REFRESH_TOKEN_SECRET,
-                { expiresIn: process.env.REFRESH_TOKEN_EXPIRE }
-            );
-
-            setAuthCookies(res, token, refreshToken);
+            issueAuthTokens(res, shopUser, "DEALER");
 
             return res.status(200).json({
                 success: true,

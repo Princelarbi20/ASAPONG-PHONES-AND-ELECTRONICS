@@ -45,7 +45,12 @@ axiosInstance.interceptors.request.use(
   async (config) => {
     const method = config.method?.toUpperCase() || 'GET';
     if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-      let csrfToken = getCookie('csrfToken');
+      // Auth forms already fetch a signed token with withCsrf(). In a
+      // cross-origin production deployment the API cookie is not readable by
+      // the storefront, so prefer the supplied header before fetching again.
+      let csrfToken = config.headers?.get?.('X-CSRF-Token')
+        || config.headers?.['X-CSRF-Token']
+        || getCookie('csrfToken');
       if (!csrfToken) {
         csrfToken = await fetchCsrfToken();
       }

@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import { Register } from "../../modules/userRegister.js";
+import { issueAuthTokens } from "../../utils/issueAuthTokens.js";
 
 export const verifyOtpController = async (req, res) => {
     try {
@@ -33,7 +34,8 @@ export const verifyOtpController = async (req, res) => {
         }
 
         // 4. Check if OTP has expired
-        if (new Date() > user.otpExpires) {
+        const verifiedAt = new Date();
+        if (!user.otpExpires || verifiedAt > user.otpExpires) {
             return res.status(400).json({
                 success: false,
                 message: "OTP has expired. Please request a new one."
@@ -51,20 +53,43 @@ export const verifyOtpController = async (req, res) => {
         }
 
         // 6. Mark user as verified and clear OTP fields
-        user.isVerified = true;
-        user.otp = null;
-        user.otpExpires = null;
-        await user.save();
+        // Consume the OTP conditionally so simultaneous submissions cannot
+        // both verify the account and receive an authenticated session.
+        const verification = await Register.updateOne(
+            {
+                _id: user._id,
+                isVerified: false,
+                otp: user.otp,
+                otpExpires: { $gt: verifiedAt },
+            },
+            {
+                $set: { isVerified: true, otp: null, otpExpires: null },
+            }
+        );
+
+        if (verification.modifiedCount !== 1) {
+            return res.status(409).json({
+                success: false,
+                message: "This OTP has expired or has already been used. Please request a new one.",
+            });
+        }
+
+        issueAuthTokens(res, user, "USER");
 
         // 7. Success response
         return res.status(200).json({
             success: true,
             message: "Email verified successfully. Your account is now active!",
+            accountType: "USER",
             user: {
                 id: user._id,
                 userName: user.userName,
                 email: user.email,
-                isVerified: user.isVerified
+                phone: user.phone,
+                role: user.role,
+                isVerified: true,
+                isSuspended: user.isSuspended,
+                cart: user.cart,
             }
         });
 

@@ -18,11 +18,18 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
+    const requestStartedAt = performance.now()
+    let csrfPreparationMs = 0
+    let registrationApiMs = 0
 
     try {
       // 🚀 withCredentials guarantees cookies are accepted and stored automatically by the browser
+      const csrfStartedAt = performance.now()
       const config = await withCsrf({ withCredentials: true })
+      csrfPreparationMs = Number((performance.now() - csrfStartedAt).toFixed(1))
+      const apiStartedAt = performance.now()
       const response = await axiosInstance.post('/user-register', formData, config)
+      registrationApiMs = Number((performance.now() - apiStartedAt).toFixed(1))
       const { user, otpExpiresAt } = response.data
 
       toast.success('Account created! Please verify your OTP.')
@@ -64,6 +71,11 @@ const Register = () => {
         toast.error(error.message || 'Registration failed. Check your connection or terminal code logs.', errorToastStyle);
       }
     } finally {
+      console.info('[performance] registration_request', JSON.stringify({
+        csrfPreparationMs,
+        registrationApiMs,
+        totalMs: Number((performance.now() - requestStartedAt).toFixed(1)),
+      }))
       setIsLoading(false)
     }
   }

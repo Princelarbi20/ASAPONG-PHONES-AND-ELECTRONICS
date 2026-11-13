@@ -1,5 +1,19 @@
 import nodemailer from 'nodemailer';
 
+let pooledTransport = null;
+
+const getPooledTransport = (user, pass) => {
+  if (pooledTransport) return pooledTransport;
+  pooledTransport = nodemailer.createTransport({
+    service: 'Gmail',
+    auth: { user, pass },
+    pool: true,
+    maxConnections: 3,
+    maxMessages: 100,
+  });
+  return pooledTransport;
+};
+
 // Nodemailer may resolve sendMail() when a message was accepted by the SMTP
 // server even if a particular recipient was rejected. Treat only acceptance
 // of the intended recipient as delivery success so callers can invalidate an
@@ -44,10 +58,7 @@ const sendEmail = async (arg1, toParam, subjectParam, htmlParam) => {
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      service: 'Gmail',
-      auth: { user: authUser, pass: authPass },
-    });
+    const transporter = getPooledTransport(authUser, authPass);
 
     const info = await transporter.sendMail({
       from: authUser,
