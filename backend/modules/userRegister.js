@@ -69,6 +69,11 @@ const userRegisterSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
+    otpVersion: {
+        type: String,
+        default: null,
+        select: false
+    },
     cart: [
         {
             productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },

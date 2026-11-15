@@ -18,6 +18,14 @@ export const otpAttemptLimiter = rateLimit({
     legacyHeaders: false,
 });
 
+export const otpResendLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: limiterMessage('Too many verification code requests. Please try again later.'),
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 export const passwordResetRequestLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 5,

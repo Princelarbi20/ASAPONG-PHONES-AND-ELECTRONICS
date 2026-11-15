@@ -1,191 +1,74 @@
-import { randomInt } from "crypto";
-import bcrypt from "bcrypt";
-import { Register } from "../../modules/userRegister.js";
-import sendEmail from "../../utils/nodemailer.js";
-import { escapeHtml } from "../../utils/escapeHtml.js";
-import { getOtpExpiryMs, OTP_RESEND_COOLDOWN_MS } from "../../config/otp.js";
+import { randomInt, randomUUID } from 'node:crypto';
+import bcrypt from 'bcrypt';
+import { performance } from 'node:perf_hooks';
+import { Register } from '../../modules/userRegister.js';
+import { enqueueOtpEmail } from '../../utils/emailOutbox.js';
+import { buildOtpEmail } from '../../utils/otpEmail.js';
+import { getOtpExpiryMs, OTP_RESEND_COOLDOWN_MS } from '../../config/otp.js';
 
 export const resendOtpController = async (req, res) => {
-    try {
-        // 1. Validate email
-        const { email } = req.body;
+  const startedAt = performance.now();
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string') return res.status(400).json({ success: false, message: 'Valid email is required.' });
+    const normalizedEmail = email.toLowerCase().trim();
+    const existing = await Register.findOne({ email: normalizedEmail }).select('+otp +otpVersion');
+    if (!existing) return res.status(404).json({ success: false, message: 'User not found.' });
+    if (existing.isVerified) return res.status(400).json({ success: false, message: 'Account is already verified.' });
+    if (!existing.email) return res.status(400).json({ success: false, message: 'User does not have a registered email.' });
 
-        if (!email || typeof email !== "string") {
-            return res.status(400).json({
-                success: false,
-                message: "Valid email is required."
-            });
-        }
+    const now = Date.now();
+    const otp = randomInt(100000, 1000000).toString();
+    const otpVersion = randomUUID();
+    const otpHashStartedAt = performance.now();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+    const otpExpiryMs = getOtpExpiryMs();
+    const otpExpires = new Date(now + otpExpiryMs);
+    const previous = { otp: existing.otp || null, otpExpires: existing.otpExpires || null, otpLastSentAt: existing.otpLastSentAt || null, otpVersion: existing.otpVersion || null };
 
-        const normalizedEmail = email.toLowerCase().trim();
+    // Atomically reserve the cooldown and replace the code; concurrent resend
+    // requests cannot queue multiple active messages for the same account.
+    const user = await Register.findOneAndUpdate({
+      _id: existing._id,
+      isVerified: false,
+      $or: [
+        { otpLastSentAt: null },
+        { otpLastSentAt: { $lte: new Date(now - OTP_RESEND_COOLDOWN_MS) } },
+      ],
+    }, {
+      $set: { otp: hashedOtp, otpExpires, otpLastSentAt: new Date(now), otpVersion },
+    }, { new: true }).select('+otpVersion');
 
-        // 2. Find user
-        const user = await Register.findOne({
-            email: normalizedEmail
-        });
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found."
-            });
-        }
-
-        // 3. Check verification status
-        if (user.isVerified) {
-            return res.status(400).json({
-                success: false,
-                message: "Account is already verified."
-            });
-        }
-
-        const now = Date.now();
-        const lastSentAt = user.otpLastSentAt?.getTime?.();
-        if (lastSentAt && now - lastSentAt < OTP_RESEND_COOLDOWN_MS) {
-            const retryAfterSeconds = Math.ceil((OTP_RESEND_COOLDOWN_MS - (now - lastSentAt)) / 1000);
-            return res.status(429).json({
-                success: false,
-                message: `Please wait ${retryAfterSeconds} seconds before requesting another OTP.`,
-                retryAfterSeconds
-            });
-        }
-
-        // 4. Generate OTP
-        const otp = randomInt(100000, 1000000).toString();
-
-        const hashedOtp = await bcrypt.hash(otp, 10);
-
-        // 5. Set expiration
-        const otpExpiryMs = getOtpExpiryMs();
-        const otpExpires = new Date(now + otpExpiryMs);
-
-        // Reserve the cooldown before delivery so repeated requests cannot flood the mail service.
-        user.otpLastSentAt = new Date(now);
-        await user.save();
-
-        // 6. Confirm recipient exists
-        if (!user.email) {
-            return res.status(400).json({
-                success: false,
-                message: "User does not have a registered email."
-            });
-        }
-       
-        // 7. Send OTP email
-        const emailResult = await sendEmail({
-            from: process.env.EMAIL_USER,
-            to:user.email,
-            subject: "Verify your OTP ",
-            html: `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Account Verification</title>
-                </head>
-
-                <body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,sans-serif;">
-
-                    <table width="100%" cellpadding="0" cellspacing="0">
-                        <tr>
-                            <td align="center" style="padding:40px 10px;">
-
-                                <table width="100%" cellpadding="0" cellspacing="0"
-                                    style="max-width:480px;background:#fff;border-radius:12px;border:1px solid #e5e7eb;">
-
-                                    <tr>
-                                        <td align="center" style="padding:24px;">
-                                            <img
-                                                src="${process.env.CLOUDINARY_LOG}"
-                                                alt="Asapong Logo"
-                                                style="max-height:55px;width:auto;"
-                                            />
-                                        </td>
-                                    </tr>
-
-                                    <tr>
-                                        <td style="padding:32px 28px;text-align:center;">
-
-                                            <h2 style="color:#111827;">
-                                                Hello, ${escapeHtml(user.userName)}!
-                                            </h2>
-
-                                            <p style="color:#4b5563;font-size:14px;line-height:1.5;">
-                                                Your verification code has been resent.
-                                                Use the OTP below to verify your account.
-                                            </p>
-
-                                            <div style="background:#f3f4f6;padding:18px;border-radius:8px;margin:24px 0;border:1px dashed #d1d5db;">
-
-                                                <span style="font-family:monospace;font-size:32px;font-weight:bold;color:#4f46e5;letter-spacing:6px;">
-                                                    ${otp}
-                                                </span>
-
-                                            </div>
-
-                                            <p style="color:#6b7280;font-size:12px;">
-                                                This OTP expires in
-                                                <strong style="color:#ef4444;">${Math.ceil(otpExpiryMs / 60000)} minutes</strong>.
-                                            </p>
-
-                                            <p style="color:#9ca3af;font-size:12px;">
-                                                If you did not request this code, ignore this email.
-                                            </p>
-
-                                        </td>
-                                    </tr>
-
-                                    <tr>
-                                        <td style="background:#f9fafb;padding:16px;text-align:center;">
-                                            <p style="color:#9ca3af;font-size:11px;">
-                                                &copy; ${new Date().getFullYear()} Asapong Inc.
-                                                All rights reserved.
-                                            </p>
-                                        </td>
-                                    </tr>
-
-                                </table>
-
-                            </td>
-                        </tr>
-                    </table>
-
-                </body>
-                </html>
-                `
-        });
-        if (!emailResult?.success) {
-            // A failed delivery should not make the user wait through the
-            // resend cooldown; the OTP itself is only committed after send.
-            user.otpLastSentAt = null;
-            await user.save();
-            console.error('Resend OTP email was not delivered:', emailResult?.error || 'Email service returned an unsuccessful result.');
-            return res.status(503).json({
-                success: false,
-                message: 'We could not send the verification email. Please try again later.'
-            });
-        }
-
-        // 8. Save OTP after successful email submission
-        user.otp = hashedOtp;
-        user.otpExpires = otpExpires;
-
-        await user.save();
-
-        // 9. Success response
-        return res.status(200).json({
-            success: true,
-            message: "OTP has been sent successfully.",
-            otpExpiresAt: otpExpires.toISOString()
-        });
-
-    } catch (error) {
-        console.error("Resend OTP controller error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error."
-        });
+    if (!user) {
+      const lastSentAt = existing.otpLastSentAt?.getTime?.();
+      const retryAfterSeconds = lastSentAt ? Math.max(1, Math.ceil((OTP_RESEND_COOLDOWN_MS - (now - lastSentAt)) / 1000)) : 1;
+      return res.status(429).json({ success: false, message: `Please wait ${retryAfterSeconds} seconds before requesting another OTP.`, retryAfterSeconds });
     }
+
+    try {
+      await enqueueOtpEmail({
+        requestId: req.id, userId: user._id, otpVersion,
+        message: { to: user.email, ...buildOtpEmail({ userName: user.userName, otp, expiresMinutes: Math.ceil(otpExpiryMs / 60000) }) },
+      });
+    } catch (queueError) {
+      await Register.updateOne({ _id: user._id, otpVersion }, { $set: previous });
+      throw queueError;
+    }
+
+    console.info('[performance] otp_resend', JSON.stringify({
+      requestId: req.id,
+      otpHashMs: Number((performance.now() - otpHashStartedAt).toFixed(1)),
+      totalMs: Number((performance.now() - startedAt).toFixed(1)),
+      result: 'queued',
+    }));
+    return res.status(200).json({
+      success: true,
+      message: 'Verification code queued for delivery.',
+      otpExpiresAt: otpExpires.toISOString(),
+      otpResendAvailableAt: new Date(now + OTP_RESEND_COOLDOWN_MS).toISOString(),
+    });
+  } catch (error) {
+    console.error('[otp-resend] failed', JSON.stringify({ requestId: req.id, errorName: error?.name, errorCode: error?.code }));
+    return res.status(500).json({ success: false, message: 'Unable to queue a verification code. Please try again.' });
+  }
 };

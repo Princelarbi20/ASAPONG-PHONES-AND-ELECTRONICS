@@ -8,6 +8,8 @@ import jwt from 'jsonwebtoken';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { Register } from '../modules/userRegister.js';
+import { EmailOutbox } from '../modules/emailOutbox.js';
+import { processEmailOutbox } from '../utils/emailOutbox.js';
 
 test('registration email, OTP verification, and automatic sign-in work in production mode', async (t) => {
   const envKeys = [
@@ -40,16 +42,33 @@ test('registration email, OTP verification, and automatic sign-in work in produc
   let storedUser = null;
   let deliveredOtp = null;
   let emailDeliveryCount = 0;
+  let failNextEmail = true;
+  let outboxJob = null;
   const originalFindOne = Register.findOne;
   const originalFindById = Register.findById;
+  const originalFindOneAndUpdate = Register.findOneAndUpdate;
   const originalUpdateOne = Register.updateOne;
   const originalSave = Register.prototype.save;
+  const originalOutboxCreate = EmailOutbox.create;
+  const originalOutboxUpdateMany = EmailOutbox.updateMany;
+  const originalOutboxFindOneAndUpdate = EmailOutbox.findOneAndUpdate;
+  const originalOutboxUpdateOne = EmailOutbox.updateOne;
   Register.findOne = (filter) => ({
     select: async () => filter.email === storedUser?.email ? storedUser : null,
   });
   Register.findById = () => ({
     select: async () => storedUser,
     then: (resolve, reject) => Promise.resolve(storedUser).then(resolve, reject),
+  });
+  Register.findOneAndUpdate = (_filter, update) => ({
+    select: async () => {
+      if (!storedUser || storedUser.isVerified) return null;
+      const cooldownCutoff = _filter.$or?.[1]?.otpLastSentAt?.$lte;
+      const cooldownAllows = !storedUser.otpLastSentAt || storedUser.otpLastSentAt <= cooldownCutoff;
+      if (!cooldownAllows) return null;
+      Object.assign(storedUser, update.$set);
+      return storedUser;
+    },
   });
   Register.updateOne = async (filter, update) => {
     const matches = storedUser
@@ -65,25 +84,53 @@ test('registration email, OTP verification, and automatic sign-in work in produc
     if (storedUser && (storedUser.email === this.email || storedUser.phone === this.phone) && storedUser !== this) {
       const duplicate = new Error('duplicate key');
       duplicate.code = 11000;
-      duplicate.keyPattern = { email: 1 };
+      duplicate.keyPattern = storedUser.email === this.email ? { email: 1 } : { phone: 1 };
       throw duplicate;
     }
     storedUser = this;
     return this;
   };
+  EmailOutbox.create = async (record) => { outboxJob = { ...record, _id: 'outbox-1', attempts: 0, status: 'pending', nextAttemptAt: new Date(0) }; return outboxJob; };
+  EmailOutbox.updateMany = async () => ({ modifiedCount: 0 });
+  EmailOutbox.findOneAndUpdate = () => ({
+    select: async () => {
+      if (!outboxJob || outboxJob.status !== 'pending') return null;
+      outboxJob.status = 'sending';
+      outboxJob.attempts += 1;
+      return outboxJob;
+    },
+  });
+  EmailOutbox.updateOne = async (_filter, update) => {
+    if (!outboxJob) return { modifiedCount: 0 };
+    Object.assign(outboxJob, update.$set || {});
+    for (const key of Object.keys(update.$unset || {})) delete outboxJob[key];
+    return { modifiedCount: 1 };
+  };
   t.after(() => {
     Register.findOne = originalFindOne;
     Register.findById = originalFindById;
+    Register.findOneAndUpdate = originalFindOneAndUpdate;
     Register.updateOne = originalUpdateOne;
     Register.prototype.save = originalSave;
+    EmailOutbox.create = originalOutboxCreate;
+    EmailOutbox.updateMany = originalOutboxUpdateMany;
+    EmailOutbox.findOneAndUpdate = originalOutboxFindOneAndUpdate;
+    EmailOutbox.updateOne = originalOutboxUpdateOne;
   });
 
   const originalCreateTransport = nodemailer.createTransport;
   nodemailer.createTransport = () => ({
     sendMail: async (message) => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
       emailDeliveryCount += 1;
       const otpMatch = message.html.match(/<span[^>]*>\s*(\d{6})\s*<\/span>/i);
       deliveredOtp = otpMatch?.[1] || null;
+      if (failNextEmail) {
+        failNextEmail = false;
+        const temporaryError = new Error('temporary provider outage');
+        temporaryError.code = 'ETEMP';
+        throw temporaryError;
+      }
       return { accepted: [message.to], rejected: [] };
     },
     close() {},
@@ -124,6 +171,13 @@ test('registration email, OTP verification, and automatic sign-in work in produc
     'X-CSRF-Token': csrfToken,
   };
 
+  const invalidRegistration = await fetch(`${baseUrl}/user-register`, {
+    method: 'POST',
+    headers: mutationHeaders,
+    body: JSON.stringify({ userName: 'Bad Name 1', email: 'invalid@example.com', phone: '0123456789', password: 'GoodPassword1!' }),
+  });
+  assert.equal(invalidRegistration.status, 422, 'invalid registration details are rejected before account creation');
+
   const registrationStart = performance.now();
   const registrationResponse = await fetch(`${baseUrl}/user-register`, {
     method: 'POST',
@@ -139,8 +193,18 @@ test('registration email, OTP verification, and automatic sign-in work in produc
   const registrationBody = await registrationResponse.json();
   assert.equal(registrationResponse.status, 201, JSON.stringify(registrationBody));
   assert.equal(registrationBody.user.isVerified, false);
+  assert.equal(outboxJob.to, undefined, 'recipient and OTP message content are not stored in plaintext');
+  assert.ok(typeof outboxJob.encryptedPayload === 'string' && outboxJob.encryptedPayload.includes('.'));
   assert.equal(registrationResponse.headers.getSetCookie().some((cookie) => /(?:accessToken|refreshToken)=/.test(cookie)), false);
-  assert.equal(emailDeliveryCount, 1, 'registration waits for successful OTP email acceptance');
+  assert.equal(emailDeliveryCount, 0, 'registration responds after durably queueing without waiting for SMTP');
+  assert.equal(outboxJob.status, 'pending');
+  await processEmailOutbox();
+  assert.equal(outboxJob.status, 'pending', 'temporary mail failure remains queued for retry');
+  assert.equal(emailDeliveryCount, 1);
+  outboxJob.nextAttemptAt = new Date(0);
+  await processEmailOutbox();
+  assert.equal(emailDeliveryCount, 2, 'outbox worker retries and sends the queued OTP email asynchronously');
+  assert.equal(outboxJob.status, 'sent');
   assert.match(deliveredOtp || '', /^\d{6}$/);
   assert.ok(Number.isFinite(registrationApiMs));
 
@@ -155,7 +219,36 @@ test('registration email, OTP verification, and automatic sign-in work in produc
     }),
   });
   assert.equal(duplicateResponse.status, 409, 'unique indexes reject duplicate account creation');
-  assert.equal(emailDeliveryCount, 1, 'duplicate registration does not send another OTP email');
+  assert.equal(emailDeliveryCount, 2, 'duplicate registration does not enqueue or send another OTP email');
+
+  const duplicatePhoneResponse = await fetch(`${baseUrl}/user-register`, {
+    method: 'POST',
+    headers: mutationHeaders,
+    body: JSON.stringify({ userName: 'Another Visitor', email: 'another-visitor@example.com', phone: '0123456789', password: 'GoodPassword1!' }),
+  });
+  assert.equal(duplicatePhoneResponse.status, 409, 'a registered phone number cannot be reused with a different email');
+
+  const originalOtp = deliveredOtp;
+  storedUser.otpLastSentAt = new Date(Date.now() - 61_000);
+  const resendResponse = await fetch(`${baseUrl}/resend-otp`, {
+    method: 'POST',
+    headers: mutationHeaders,
+    body: JSON.stringify({ email: 'new-visitor@example.com' }),
+  });
+  assert.equal(resendResponse.status, 200);
+  assert.equal(emailDeliveryCount, 2, 'resend response does not wait for SMTP');
+  outboxJob.nextAttemptAt = new Date(0);
+  await processEmailOutbox();
+  assert.equal(outboxJob.status, 'sent');
+  assert.equal(emailDeliveryCount, 3);
+  assert.notEqual(deliveredOtp, originalOtp, 'resend replaces the active code');
+
+  const resendCooldownResponse = await fetch(`${baseUrl}/resend-otp`, {
+    method: 'POST',
+    headers: mutationHeaders,
+    body: JSON.stringify({ email: 'new-visitor@example.com' }),
+  });
+  assert.equal(resendCooldownResponse.status, 429, 'rapid resend requests are rate limited');
 
   const postOtp = (otp) => fetch(`${baseUrl}/verify-otp`, {
     method: 'POST',

@@ -1,8 +1,10 @@
 import bcrypt from "bcrypt";
 import { Register } from "../../modules/userRegister.js";
 import { issueAuthTokens } from "../../utils/issueAuthTokens.js";
+import { performance } from 'node:perf_hooks';
 
 export const verifyOtpController = async (req, res) => {
+    const startedAt = performance.now();
     try {
         const { email, otp } = req.body;
 
@@ -16,7 +18,9 @@ export const verifyOtpController = async (req, res) => {
 
         // 2. Find user by email
 
+        const lookupStartedAt = performance.now();
         const user = await Register.findOne({ email: email.toLowerCase().trim() }).select('+otp');
+        console.info('[performance] otp_verification', JSON.stringify({ requestId: req.id, operation: 'userLookupMs', durationMs: Number((performance.now() - lookupStartedAt).toFixed(1)) }));
 
         if (!user) {
             return res.status(404).json({
@@ -43,7 +47,9 @@ export const verifyOtpController = async (req, res) => {
         }
 
         // 5. Compare OTP with hashed OTP
+        const compareStartedAt = performance.now();
         const isOtpValid = await bcrypt.compare(otp, user.otp);
+        console.info('[performance] otp_verification', JSON.stringify({ requestId: req.id, operation: 'otpCompareMs', durationMs: Number((performance.now() - compareStartedAt).toFixed(1)) }));
 
         if (!isOtpValid) {
             return res.status(401).json({
@@ -66,6 +72,7 @@ export const verifyOtpController = async (req, res) => {
                 $set: { isVerified: true, otp: null, otpExpires: null },
             }
         );
+        console.info('[performance] otp_verification', JSON.stringify({ requestId: req.id, operation: 'totalMs', durationMs: Number((performance.now() - startedAt).toFixed(1)) }));
 
         if (verification.modifiedCount !== 1) {
             return res.status(409).json({
@@ -94,7 +101,7 @@ export const verifyOtpController = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("OTP Verification Error:", error);
+        console.error('[otp-verification] failed', JSON.stringify({ requestId: req.id, errorName: error?.name, errorCode: error?.code }));
         return res.status(500).json({
             success: false,
             message: "Internal server error during OTP verification."

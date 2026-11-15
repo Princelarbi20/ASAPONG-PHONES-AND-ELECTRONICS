@@ -10,6 +10,9 @@ const getPooledTransport = (user, pass) => {
     pool: true,
     maxConnections: 3,
     maxMessages: 100,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
   });
   return pooledTransport;
 };
@@ -87,7 +90,6 @@ const sendEmail = async (arg1, toParam, subjectParam, htmlParam) => {
       code: error?.code,
       responseCode: error?.responseCode,
       command: error?.command,
-      message: error?.message,
     }));
     return { success: false, error };
   }

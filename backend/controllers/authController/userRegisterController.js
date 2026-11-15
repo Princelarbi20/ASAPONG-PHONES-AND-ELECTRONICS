@@ -1,215 +1,89 @@
-import bcrypt from "bcrypt";
-import { randomInt } from "crypto";
-import { Register } from "../../modules/userRegister.js";
-import sendEmail from "../../utils/nodemailer.js";
-import { escapeHtml } from "../../utils/escapeHtml.js";
-import { getOtpExpiryMs } from "../../config/otp.js";
-import { performance } from "node:perf_hooks";
+import bcrypt from 'bcrypt';
+import { randomInt, randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
+import { Register } from '../../modules/userRegister.js';
+import { getOtpExpiryMs, OTP_RESEND_COOLDOWN_MS } from '../../config/otp.js';
+import { buildOtpEmail } from '../../utils/otpEmail.js';
+import { enqueueOtpEmail } from '../../utils/emailOutbox.js';
 
 export const userRegisterController = async (req, res) => {
-    const requestStartedAt = performance.now();
-    const timings = {};
-    const measure = async (name, operation) => {
-        const startedAt = performance.now();
-        try {
-            return await operation();
-        } finally {
-            timings[name] = Number((performance.now() - startedAt).toFixed(1));
-        }
-    };
-    const logPerformance = (result) => console.info('[performance] registration', JSON.stringify({
-        result,
-        ...timings,
-        totalMs: Number((performance.now() - requestStartedAt).toFixed(1)),
-    }));
+  const requestStartedAt = performance.now();
+  const timings = {};
+  const measure = async (name, operation) => {
+    const startedAt = performance.now();
+    try { return await operation(); }
+    finally { timings[name] = Number((performance.now() - startedAt).toFixed(1)); }
+  };
+  const logPerformance = (result) => console.info('[performance] registration', JSON.stringify({
+    requestId: req.id, result, ...timings,
+    totalMs: Number((performance.now() - requestStartedAt).toFixed(1)),
+  }));
 
-    try {
-        const { userName, email, phone, password } = req.body;
-
-        // 1. Validate mandatory input fields
-        if (!userName || !email || !phone || !password) {
-            return res.status(400).json({
-                success: false,
-                message: "All fields (username, email, phone, and password) are required."
-            });
-        }
-
-        // Validate Name
-        const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M} .'-]*$/u;
-        if (!nameRegex.test(userName)) {
-            return res.status(400).json({
-                success: false,
-                message: "Name validation failed. Names cannot contain symbols or numbers."
-            });
-        }
-
-        // Validate Email Syntax
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        const normalizedEmail = email.toLowerCase().trim();
-        if (!emailRegex.test(normalizedEmail)) {
-            return res.status(400).json({
-                success: false,
-                message: "Please provide a valid email address."
-            });
-        }
-
-        // Validate Phone (10 digits)
-        let cleanPhone = phone.replace(/\D/g, "");
-        if (cleanPhone.startsWith("233") && cleanPhone.length === 12) cleanPhone = `0${cleanPhone.slice(3)}`;
-        if (cleanPhone.length !== 10) {
-            return res.status(400).json({
-                success: false,
-                message: "Phone verification failure. Contact number must be 10 digits long."
-            });
-        }
-
-        // Validate Password Strength
-        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/;
-        if (!passwordRegex.test(password)) {
-            return res.status(400).json({
-                success: false,
-                message: "Password must be at least 8 characters and include uppercase, lowercase, numbers, and special characters."
-            });
-        }
-
-        // Mongo's unique email and phone indexes make creation atomic and
-        // prevent races, so a preliminary duplicate lookup is unnecessary.
-        // 2. Hash the password and OTP concurrently; both use the same cost.
-        const otpGenerationStartedAt = performance.now();
-        const otp = randomInt(100000, 1000000).toString();
-        timings.otpGenerationMs = Number((performance.now() - otpGenerationStartedAt).toFixed(1));
-        const [hashedPassword, hashOtp] = await Promise.all([
-            measure('passwordHashMs', () => bcrypt.hash(password, 10)),
-            measure('otpHashMs', () => bcrypt.hash(otp, 10)),
-        ]);
-        
-        const otpExpiryMs = getOtpExpiryMs();
-        const otpExpires = new Date(Date.now() + otpExpiryMs);
-
-        // 4. Save New User to Database
-        const newUser = new Register({
-            userName: userName.trim(),
-            email: normalizedEmail,
-            phone: cleanPhone,
-            password: hashedPassword,
-            role: "USER",
-            isSuspended: false,
-            isVerified: false, // User must verify OTP next
-            cart: [],
-            otp: hashOtp,
-            otpExpires
-        });
-
-        await measure('databaseCreateMs', () => newUser.save());
-
-        // 5. Send Styled Verification Email
-        try {
-            const emailResult = await measure('emailDeliveryMs', () => sendEmail({
-                to: newUser.email,
-                subject: "Verify your account",
-                html: `
-  <!DOCTYPE html>
-  <html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verify Your Account</title>
-  </head>
-  <body style="margin: 0; padding: 0; background-color: #f4f6f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
-      <tr>
-        <td align="center" style="padding: 40px 10px;">
-          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 480px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); overflow: hidden; border: 1px solid #e5e7eb;">
-            
-            <tr>
-              <td align="center" style="background-color: transparent; padding: 24px 24px 12px 24px;">
-                <img src="${process.env.CLOUDINARY_LOG}" alt="Asapong Logo" style="max-height: 55px; width: auto; display: block; border: 0;" />
-              </td>
-            </tr>
-
-            <tr>
-              <td style="padding: 32px 28px; text-align: center;">
-                <h2 style="color: #111827; margin: 0 0 12px 0; font-size: 20px; font-weight: 600;">
-                  Hello, ${escapeHtml(newUser.userName)}!
-                </h2>
-                <p style="color: #4b5563; margin: 0 0 24px 0; font-size: 14px; line-height: 1.5;">
-                  Thank you for registering. Use the One-Time Password (OTP) below to complete your account verification:
-                </p>
-
-                <div style="background-color: #f3f4f6; border-radius: 8px; padding: 18px; margin-bottom: 24px; border: 1px dashed #d1d5db;">
-                  <span style="font-family: 'Courier New', Courier, monospace; font-size: 32px; font-weight: 700; color: #4f46e5; letter-spacing: 6px;">
-                    ${otp}
-                  </span>
-                </div>
-
-                <p style="color: #6b7280; font-size: 12px; margin: 0 0 8px 0;">
-                  ⏱️ This OTP will expire in <strong style="color: #ef4444;">${Math.ceil(otpExpiryMs / 60000)} minutes</strong>.
-                </p>
-                <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-                  If you didn't request this code, you can safely ignore this email.
-                </p>
-              </td>
-            </tr>
-
-            <tr>
-              <td style="background-color: #f9fafb; padding: 16px 28px; text-align: center; border-top: 1px solid #f3f4f6;">
-                <p style="color: #9ca3af; font-size: 11px; margin: 0;">
-                  &copy; ${new Date().getFullYear()} Asapong Inc. All rights reserved.
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-  </html>
-`
-            }));
-            if (!emailResult?.success) {
-                throw emailResult?.error || new Error('Verification email could not be sent.');
-            }
-            newUser.otpLastSentAt = new Date();
-            await measure('databaseDeliveryReceiptMs', () => newUser.save());
-        } catch (emailError) {
-            console.error("Failed to send verification email:", emailError?.message || 'Email delivery failed.');
-            logPerformance('email_failed');
-            return res.status(503).json({
-                success: false,
-                message: "Your account was created, but the verification email could not be sent. Please try resending the OTP shortly.",
-                otpExpiresAt: otpExpires.toISOString(),
-                user: { email: newUser.email }
-            });
-        }
-
-        // 6. Return Successful Response
-        logPerformance('created');
-        return res.status(201).json({
-            success: true,
-            message: "Registration successful. Please verify the OTP sent to your email.",
-            accountType: "USER",
-            otpExpiresAt: otpExpires.toISOString(),
-            user: {
-                id: newUser._id,
-                userName: newUser.userName,
-                email: newUser.email,
-                phone: newUser.phone,
-                role: newUser.role,
-                isVerified: newUser.isVerified
-            }
-        });
-
-    } catch (error) {
-        if (error?.code === 11000) {
-            const field = Object.keys(error.keyPattern || error.keyValue || {})[0];
-            logPerformance('duplicate');
-            return res.status(409).json({ success: false, message: field === 'phone' ? 'This phone number is already registered.' : 'This email address is already registered.' });
-        }
-        console.error("User Registration Error:", error?.message || 'Registration failed.');
-        logPerformance('failed');
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error during registration."
-        });
+  try {
+    const { userName, email, phone, password } = req.body;
+    if (!userName || !email || !phone || !password) {
+      return res.status(400).json({ success: false, message: 'All fields (username, email, phone, and password) are required.' });
     }
+    const normalizedEmail = email.toLowerCase().trim();
+    if (!/^[\p{L}\p{M}][\p{L}\p{M} .'-]*$/u.test(userName)) {
+      return res.status(400).json({ success: false, message: 'Name validation failed. Names cannot contain symbols or numbers.' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid email address.' });
+    }
+    let cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.startsWith('233') && cleanPhone.length === 12) cleanPhone = `0${cleanPhone.slice(3)}`;
+    if (cleanPhone.length !== 10) {
+      return res.status(400).json({ success: false, message: 'Phone verification failure. Contact number must be 10 digits long.' });
+    }
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/.test(password)) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters and include uppercase, lowercase, numbers, and special characters.' });
+    }
+
+    const otpStartedAt = performance.now();
+    const otp = randomInt(100000, 1000000).toString();
+    const otpVersion = randomUUID();
+    timings.otpGenerationMs = Number((performance.now() - otpStartedAt).toFixed(1));
+    const [hashedPassword, hashOtp] = await Promise.all([
+      measure('passwordHashMs', () => bcrypt.hash(password, 10)),
+      measure('otpHashMs', () => bcrypt.hash(otp, 10)),
+    ]);
+    const otpExpiryMs = getOtpExpiryMs();
+    const otpExpires = new Date(Date.now() + otpExpiryMs);
+    const user = new Register({
+      userName: userName.trim(), email: normalizedEmail, phone: cleanPhone,
+      password: hashedPassword, role: 'USER', isSuspended: false,
+      isVerified: false, cart: [], otp: hashOtp, otpExpires,
+      otpLastSentAt: new Date(), otpVersion,
+    });
+
+    await measure('databaseCreateMs', () => user.save());
+    try {
+      await measure('emailQueueWriteMs', () => enqueueOtpEmail({
+        requestId: req.id, userId: user._id, otpVersion,
+        message: { to: user.email, ...buildOtpEmail({ userName: user.userName, otp, expiresMinutes: Math.ceil(otpExpiryMs / 60000) }) },
+      }));
+    } catch (queueError) {
+      await Register.deleteOne({ _id: user._id });
+      throw queueError;
+    }
+
+    logPerformance('created_email_queued');
+    return res.status(201).json({
+      success: true,
+      message: 'Registration successful. Your verification code is queued for delivery.',
+      accountType: 'USER', otpExpiresAt: otpExpires.toISOString(),
+      otpResendAvailableAt: new Date(Date.now() + OTP_RESEND_COOLDOWN_MS).toISOString(),
+      user: { id: user._id, userName: user.userName, email: user.email, phone: user.phone, role: user.role, isVerified: user.isVerified },
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      const field = Object.keys(error.keyPattern || error.keyValue || {})[0];
+      logPerformance('duplicate');
+      return res.status(409).json({ success: false, message: field === 'phone' ? 'This phone number is already registered.' : 'This email address is already registered.' });
+    }
+    console.error('[registration] failed', JSON.stringify({ requestId: req.id, errorName: error?.name, errorCode: error?.code }));
+    logPerformance('failed');
+    return res.status(500).json({ success: false, message: 'Internal server error during registration.' });
+  }
 };

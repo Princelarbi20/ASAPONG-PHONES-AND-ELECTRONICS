@@ -1,6 +1,6 @@
 // Auth Controllers
 import { verifyToken } from "../middleware/verifyToken.js";
-import { apiLimiter, authAttemptLimiter, otpAttemptLimiter, registrationLimiter, passwordResetRequestLimiter, passwordResetVerifyLimiter } from "../middleware/loginLimitation.js";
+import { apiLimiter, authAttemptLimiter, otpAttemptLimiter, otpResendLimiter, registrationLimiter, passwordResetRequestLimiter, passwordResetVerifyLimiter } from "../middleware/loginLimitation.js";
 import { refreshToken } from "../middleware/refreshToken.js";
 import { userRegisterController } from "../controllers/authController/userRegisterController.js";
 import { userLoginController } from "../controllers/authController/userloginController.js";
@@ -22,7 +22,7 @@ export const authRouter= express.Router()
 authRouter.get("/auth/session", verifyToken, refreshToken, validateRequest({ query: {}, body: {} }), getAuthSessionController);
 authRouter.post("/user-register", registrationLimiter, validateRequest({ body: { "userName*": v.name, "email*": v.email, "phone*": v.phone, "password*": v.password }, query: {} }), userRegisterController);
 authRouter.post("/verify-otp", otpAttemptLimiter, validateRequest({ body: { "email*": v.email, "otp*": (value) => typeof value === "string" && /^\d{6}$/.test(value) }, query: {} }), verifyOtpController);
-authRouter.post("/resend-otp", otpAttemptLimiter, validateRequest({ body: { "email*": v.email }, query: {} }), resendOtpController);
+authRouter.post("/resend-otp", otpResendLimiter, validateRequest({ body: { "email*": v.email }, query: {} }), resendOtpController);
 authRouter.post("/user-login", authAttemptLimiter, validateRequest({ body: { "email*": v.email, "password*": (value) => typeof value === "string" && value.length <= 128 }, query: {} }), userLoginController);
 authRouter.post("/forgot-password", passwordResetRequestLimiter, validateRequest({ body: { "email*": v.email }, query: {} }), forgotPasswordController);
 const validResetFlowId = (value) => typeof value === 'string' && value.length <= 512 && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(value);

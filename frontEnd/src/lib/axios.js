@@ -30,6 +30,7 @@ const axiosInstance = axios.create({
   
   baseURL: API_ENDPOINT_BASE,
   withCredentials: true,
+  timeout: 20_000,
 });
 
 const fetchCsrfToken = async () => {
@@ -51,7 +52,7 @@ axiosInstance.interceptors.request.use(
       let csrfToken = config.headers?.get?.('X-CSRF-Token')
         || config.headers?.['X-CSRF-Token']
         || getCookie('csrfToken');
-      if (!csrfToken) {
+      if (!csrfToken && !config.csrfPrepared) {
         csrfToken = await fetchCsrfToken();
       }
       if (csrfToken) {

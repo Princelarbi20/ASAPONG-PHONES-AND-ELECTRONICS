@@ -31,6 +31,7 @@ export const withCsrf = async (config = {}) => {
     const token = await getCsrfToken();
     return {
         ...config,
+        csrfPrepared: true,
         headers: {
             ...(config.headers || {}),
             ...(token ? { 'X-CSRF-Token': token } : {}),

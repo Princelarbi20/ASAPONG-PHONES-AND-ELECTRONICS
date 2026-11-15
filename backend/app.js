@@ -20,6 +20,8 @@ import { csrfProtection, issueCsrfToken } from './middleware/csrfProtection.js';
 import { paystackWebhookController } from './controllers/Payment-controllers/paymentWebhookController.js';
 import { validateRequest } from './middleware/requestValidation.js';
 import { assertTestEnvironment } from './config/environmentSafety.js';
+import { randomUUID } from 'node:crypto';
+import { startEmailOutboxWorker } from './utils/emailOutbox.js';
 
 const app = express();
 // Resolve the backend env file from this module's location so startup works
@@ -49,6 +51,7 @@ app.use(
   cors({
     origin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
     credentials: true,
+    exposedHeaders: ['X-Request-ID'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
   })
 );
@@ -59,6 +62,22 @@ app.post('/api/v1/payments/webhook',express.raw({ type: 'application/json' }),va
 // Middlewares
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+app.use((req, res, next) => {
+  req.id = randomUUID();
+  req.requestStartedAt = performance.now();
+  res.setHeader('X-Request-ID', req.id);
+  res.on('finish', () => {
+    if (/\/(?:user-register|verify-otp|resend-otp)$/.test(req.path)) {
+      console.info('[performance] auth_request', JSON.stringify({
+        requestId: req.id,
+        route: req.path,
+        status: res.statusCode,
+        durationMs: Number((performance.now() - req.requestStartedAt).toFixed(1)),
+      }));
+    }
+  });
+  next();
+});
 app.use('/api/v1', csrfProtection);
 app.get('/api/v1/csrf-token', validateRequest({ query: {}, body: {} }), (req, res) => {
   res.json({ csrfToken: issueCsrfToken(req, res) });
@@ -88,6 +107,7 @@ const startServer = async () => {
   const startedAt = performance.now();
   try {
     await connectDB();
+    startEmailOutboxWorker();
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running on port ${PORT}`);
       console.info('[performance] app_ready', JSON.stringify({

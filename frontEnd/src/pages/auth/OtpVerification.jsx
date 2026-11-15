@@ -14,8 +14,10 @@ const OtpVerification = () => {
   const [otp, setOtp] = useState(new Array(OTP_LENGTH).fill(''));
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
-  const [resendWaitSeconds, setResendWaitSeconds] = useState(0);
+  const [resendWaitSeconds, setResendWaitSeconds] = useState(() => Math.max(0, Math.ceil((Date.parse(location.state?.otpResendAvailableAt || '') - Date.now()) / 1000)));
   const inputRefs = useRef([]);
+  const verifyingRef = useRef(false);
+  const resendingRef = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -85,6 +87,7 @@ const OtpVerification = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (verifyingRef.current) return;
     const finalOtp = otp.join('');
 
     if (isExpired) {
@@ -97,6 +100,7 @@ const OtpVerification = () => {
       return;
     }
 
+    verifyingRef.current = true;
     setIsLoading(true);
     try {
       const config = await withCsrf({ withCredentials: true });
@@ -109,7 +113,7 @@ const OtpVerification = () => {
         navigate('/', { replace: true });
       }
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'OTP verification failed. Please try again.';
+      const errorMessage = error.response?.data?.message || (error.code === 'ECONNABORTED' ? 'Verification timed out. Please check your connection and try again.' : 'OTP verification failed. Please try again.');
       toast.error(errorMessage, {
         style: {
           border: '2px solid #ef4444',
@@ -125,30 +129,33 @@ const OtpVerification = () => {
       setOtp(new Array(OTP_LENGTH).fill(''));
       inputRefs.current[0]?.focus();
     } finally {
+      verifyingRef.current = false;
       setIsLoading(false);
     }
   };
 
   const handleResend = async () => {
-    if (isResending || resendWaitSeconds > 0) return;
+    if (resendingRef.current || resendWaitSeconds > 0) return;
+    resendingRef.current = true;
     setIsResending(true);
     try {
       const config = await withCsrf({ withCredentials: true });
       const response = await axiosInstance.post('/resend-otp', { email }, config);
       
-      toast.success('OTP has been resent to your email');
+      toast.success('A new OTP has been queued for email delivery');
       setOtp(new Array(OTP_LENGTH).fill(''));
       setExpiresAt(Date.parse(response.data.otpExpiresAt) || Date.now() + OTP_EXPIRY_MS);
       setCurrentTime(Date.now());
-      setResendWaitSeconds(RESEND_COOLDOWN_SECONDS);
+      setResendWaitSeconds(Math.max(0, Math.ceil((Date.parse(response.data.otpResendAvailableAt || '') - Date.now()) / 1000)) || RESEND_COOLDOWN_SECONDS);
       inputRefs.current[0]?.focus();
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Failed to resend OTP. Please try again.';
+      const errorMessage = error.response?.data?.message || (error.code === 'ECONNABORTED' ? 'The resend request timed out. Please check your connection.' : 'Failed to resend OTP. Please try again.');
       if (error.response?.status === 429 && Number.isFinite(error.response?.data?.retryAfterSeconds)) {
         setResendWaitSeconds(error.response.data.retryAfterSeconds);
       }
       toast.error(errorMessage);
     } finally {
+      resendingRef.current = false;
       setIsResending(false);
     }
   };
@@ -273,12 +280,12 @@ const OtpVerification = () => {
                     onChange={(e) => handleChange(e, index)}
                     onKeyDown={(e) => handleKeyDown(e, index)}
                     onPaste={handlePaste}
-                    disabled={isLoading || isExpired}
+                    disabled={isExpired}
                     className={`h-12 w-full min-w-0 max-w-[3rem] flex-1 rounded-lg border bg-white text-center font-heading text-xl font-bold tabular-nums text-indigo-600 shadow-sm transition-colors duration-200 focus:outline-none focus:ring-2 sm:h-14 sm:max-w-[3.5rem] sm:text-2xl ${
                       hasValue
                         ? 'border-green-300 ring-green-100'
                         : 'border-gray-300 focus:border-indigo-600 focus:ring-indigo-200'
-                    } ${isLoading || isExpired ? 'cursor-not-allowed opacity-50' : ''}`}
+                    } ${isExpired ? 'cursor-not-allowed opacity-50' : ''}`}
                   />
                 );
               })}
@@ -300,6 +307,7 @@ const OtpVerification = () => {
                   : 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-300'
               }`}
             >
+              {isLoading && <span aria-hidden="true" className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current/40 border-t-current" />}
               {isLoading ? 'VERIFYING...' : 'VERIFY OTP'}
             </button>
           </form>
@@ -315,6 +323,7 @@ const OtpVerification = () => {
               disabled={isResending || resendWaitSeconds > 0}
               className="min-h-11 rounded-md px-3 text-sm font-semibold tabular-nums text-indigo-600 transition-colors hover:text-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
+              {isResending && <span aria-hidden="true" className="mr-2 inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-500/30 border-t-indigo-600 align-middle" />}
               {isResending ? 'RESENDING...' : resendWaitSeconds > 0 ? `Resend in ${resendWaitSeconds}s` : 'Resend Code'}
             </button>
           </footer>

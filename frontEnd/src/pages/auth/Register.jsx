@@ -21,6 +21,7 @@ const Register = () => {
     const requestStartedAt = performance.now()
     let csrfPreparationMs = 0
     let registrationApiMs = 0
+    let requestId = null
 
     try {
       // 🚀 withCredentials guarantees cookies are accepted and stored automatically by the browser
@@ -30,18 +31,21 @@ const Register = () => {
       const apiStartedAt = performance.now()
       const response = await axiosInstance.post('/user-register', formData, config)
       registrationApiMs = Number((performance.now() - apiStartedAt).toFixed(1))
-      const { user, otpExpiresAt } = response.data
+      requestId = response.headers?.['x-request-id'] || null
+      const { user, otpExpiresAt, otpResendAvailableAt } = response.data
 
-      toast.success('Account created! Please verify your OTP.')
+      toast.success('Account created. Your verification email is queued.')
       // Navigate to OTP verification page with email in state
-      navigate('/auth/otp-verify', { state: { email: user.email, otpExpiresAt } })
+      navigate('/auth/otp-verify', { state: { email: user.email, otpExpiresAt, otpResendAvailableAt } })
     } catch (error) {
+      requestId = error.response?.headers?.['x-request-id'] || requestId
       if (error.response?.status === 503 && error.response?.data?.user?.email) {
         toast.error(error.response.data.message || 'Account created, but the OTP email could not be sent. You can request another code now.');
         navigate('/auth/otp-verify', {
           state: {
             email: error.response.data.user.email,
             otpExpiresAt: error.response.data.otpExpiresAt,
+            otpResendAvailableAt: error.response.data.otpResendAvailableAt,
           },
         });
         return;
@@ -68,10 +72,13 @@ const Register = () => {
       } else if (statusText) {
         toast.error(`Server Error (${statusCode}): ${statusText}`, errorToastStyle);
       } else {
-        toast.error(error.message || 'Registration failed. Check your connection or terminal code logs.', errorToastStyle);
+        toast.error(error.code === 'ECONNABORTED'
+          ? 'Registration is taking too long. Check your connection and try again.'
+          : (error.message || 'Registration failed. Check your connection and try again.'), errorToastStyle);
       }
     } finally {
       console.info('[performance] registration_request', JSON.stringify({
+        requestId,
         csrfPreparationMs,
         registrationApiMs,
         totalMs: Number((performance.now() - requestStartedAt).toFixed(1)),

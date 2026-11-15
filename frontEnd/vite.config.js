@@ -15,8 +15,9 @@ export default defineConfig(({ mode }) => {
   if (!apiBase) {
     throw new Error('Set VITE_API_BASE_URL in the frontend environment.')
   }
-  if (mode === 'development' && !/^https?:\/\//i.test(apiBase)) {
-    throw new Error('VITE_API_BASE_URL must be an absolute backend origin in development; this app uses direct API requests, not a Vite proxy.')
+  const usesApiProxy = apiBase.startsWith('/') && Boolean(env.API_PROXY_TARGET)
+  if (mode === 'development' && !/^https?:\/\//i.test(apiBase) && !usesApiProxy) {
+    throw new Error('Set VITE_API_BASE_URL to an absolute backend origin, or configure API_PROXY_TARGET when using a relative /api base.')
   }
 
   return {
@@ -29,5 +30,14 @@ export default defineConfig(({ mode }) => {
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: usesApiProxy ? {
+    proxy: {
+      '/api': {
+        target: env.API_PROXY_TARGET,
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  } : undefined,
   }
 })

@@ -1,12 +1,13 @@
 
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Input } from "@base-ui/react/input";
 import { Eye, EyeOff } from 'lucide-react';
 
 export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit, buttonText = "Submit" }) => {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [showPassword, setShowPassword] = useState(false);
   const isRegistration = formControl.some((field) => field.name === 'userName');
 
@@ -27,9 +28,10 @@ export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit,
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (submitting || !validate()) return;
+    if (submittingRef.current || !validate()) return;
+    submittingRef.current = true;
     setSubmitting(true);
-    try { await onSubmit(event); } finally { setSubmitting(false); }
+    try { await onSubmit(event); } finally { submittingRef.current = false; setSubmitting(false); }
   };
 
   const updateValue = (name, value) => {
@@ -129,8 +131,10 @@ export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit,
       <button
         type="submit"
         disabled={submitting}
+        aria-busy={submitting}
         className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors cursor-pointer mt-2"
       >
+        {submitting && <span aria-hidden="true" className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
         {submitting ? 'Please wait…' : buttonText}
       </button>
     </form>
