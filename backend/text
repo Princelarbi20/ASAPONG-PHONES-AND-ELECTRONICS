@@ -1,0 +1,51 @@
+/*
+               *ADMIN API ROUTES
+
+ GET ALL USERS  Method: GET      http://localhost:5000/api/v1/get-all-users 
+
+ GET ALL ORDERS Method:GET       http://localhost:5000/api/v1/get-all-orders
+ 
+ UPDATE ORDER STATUS Method:PUT  http://localhost:5000/api/v1/update-orders/:id
+
+ DELETE PRODUCT Method:DELETE    http://localhost:5000/api/v1/products-delete/:id
+
+ ADD PRODUCT Method: POST        http://localhost:5000/api/v1/products
+
+ UPDATE PRODUCT Method:PUT       http://localhost:5000/api/v1/products-update/:id
+
+SUSPEND  METHOD PUT              http://localhost:5000/api/v1/suspend-user/:id
+
+UNSUSPEN  METHODPUT              http://localhost:5000/api/v1/unsuspend-user/:id
+UNSUSPEN  METHODPUT              http://localhost:5000/api/v1/get-Allproduct
+
+get all products                 http://localhost:5000/api/v1/get-All-product
+
+
+
+create shop requiest             http://localhost:5000/api/v1/create-shop
+get all shops regust             http://localhost:5000/api/v1/get-shop-request
+update shop status               http://localhost:5000/api/v1/update-shop-status
+
+
+get cart shops                   http://localhost:5000/api/v1/cart
+add product to cart              http://localhost:5000/api/v1//api/v1/add-to-cart
+update product from cart         http://localhost:5000/api/v1//api/v1//update/:productId
+remove product from cart         http://localhost:5000/api/v1//api/v1//remove/:productId
+remove product from cart         http://localhost:5000/api/v1//api/v1/create-order
+remove product from cart         http://localhost:5000/api/v1//api/v1/my-orders
+
+POST   /api/v1/create-shop
+POST   /api/v1/user-register
+POST   /api/v1/user-login
+POST   /api/v1/add-to-cart
+GET    /api/v1/cart
+POST   /api/v1/create-order
+GET    /api/v1/my-orders
+GET    /api/v1/get-all-users
+GET    /api/v1/get-all-orders
+PUT    /api/v1/update-orders/:id
+PUT    /api/v1/suspend-user/:id
+POST   /api/v1/products
+PUT    /api/v1/products-update/:id
+DELETE /api/v1/products-delete/:id
+http://localhost:5000/api/v1/payment/initialize
