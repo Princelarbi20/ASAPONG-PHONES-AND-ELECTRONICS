@@ -1,0 +1,25 @@
+
+services:
+  - type: web
+    name: asa-phones-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "5000"
+
+  - type: web
+    name: asa-phones-frontend
+    runtime: docker
+    dockerfilePath: ./frontEnd/Dockerfile
+    dockerContext: ./frontEnd
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: VITE_API_BASE_URL
+        value: /api
+      - key: API_PROXY_TARGET
+        sync: false
