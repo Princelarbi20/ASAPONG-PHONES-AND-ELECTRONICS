@@ -84,7 +84,7 @@ export const completeForgotPasswordResetController = async (req, res) => {
         const record = await PasswordResetOTP.findOneAndUpdate(
             { userId: user._id, authorizationHash: hashResetSecret(resetAuthorization), authorizationExpiresAt: { $gt: new Date() } },
             { $set: { authorizationHash: null, authorizationExpiresAt: null, otpHash: null, otpExpiresAt: null, otpAttempts: 0 } },
-            { new: true },
+            { returnDocument: "after" },
         );
         if (!record) return res.status(400).json({ success: false, message: 'The reset session is invalid or expired. Please start again.' });
 

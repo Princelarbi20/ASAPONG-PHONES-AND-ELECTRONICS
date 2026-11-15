@@ -77,7 +77,7 @@ export const addProductController = async (req, res, next) => {
       }
 
       const updatedProduct = await Product.findByIdAndUpdate(id, updateQuery, {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       });
 

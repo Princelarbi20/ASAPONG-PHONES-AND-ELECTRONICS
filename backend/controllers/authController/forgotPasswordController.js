@@ -160,7 +160,7 @@ export const forgotPasswordController = async (req, res) => {
             update,
             {
                 upsert: !record,
-                new: true,
+                returnDocument: "after",
                 setDefaultsOnInsert: true,
                 runValidators: true
             }

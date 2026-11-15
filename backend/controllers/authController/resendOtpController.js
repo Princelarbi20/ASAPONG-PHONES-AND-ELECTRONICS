@@ -37,7 +37,7 @@ export const resendOtpController = async (req, res) => {
       ],
     }, {
       $set: { otp: hashedOtp, otpExpires, otpLastSentAt: new Date(now), otpVersion },
-    }, { new: true }).select('+otpVersion');
+    }, { returnDocument: "after" }).select('+otpVersion');
 
     if (!user) {
       const lastSentAt = existing.otpLastSentAt?.getTime?.();

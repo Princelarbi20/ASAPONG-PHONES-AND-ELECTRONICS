@@ -28,7 +28,7 @@ export const verifyResetOtpController = async (req, res) => {
     const updated = await PasswordResetOTP.findOneAndUpdate(
       { _id: record._id, otpHash: record.otpHash, flowIdHash, flowIdExpiresAt: { $gt: now }, otpExpiresAt: { $gt: now }, otpAttempts: { $lt: 5 } },
       { $set: { otpHash: null, otpExpiresAt: null, flowIdHash: null, flowIdExpiresAt: null, authorizationHash, authorizationExpiresAt: new Date(now.getTime() + RESET_AUTH_TTL_MS), expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000) } },
-      { new: true },
+      { returnDocument: "after" },
     );
     if (!updated) return res.status(400).json({ success: false, message: 'The code is invalid or expired. Request a new code and try again.' });
     return res.status(200).json({ success: true, message: 'Code verified.', resetAuthorization, authorizationExpiresAt: updated.authorizationExpiresAt });

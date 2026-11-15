@@ -31,12 +31,12 @@ export const updateUserController = async (req, res) => {
         }
 
         // 3. Update the document in MongoDB
-        // { new: true } returns the updated document instead of the old one
+        // { returnDocument: "after" } returns the updated document instead of the old one
         // { runValidators: true } ensures the updates obey your Schema rules (like unique email)
         const updatedUser = await Register.findByIdAndUpdate(
             userId,
             { $set: updates },
-            { new: true, runValidators: true }
+            { returnDocument: "after", runValidators: true }
         ).select("-password"); // Shield the password hash from being sent back
 
         if (!updatedUser) {

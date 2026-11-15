@@ -77,7 +77,7 @@ export const updateProductController = async (req, res, next) => {
     };
 
     const updatedProduct = await Product.findByIdAndUpdate(id, { $set: updateData }, {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     });
 

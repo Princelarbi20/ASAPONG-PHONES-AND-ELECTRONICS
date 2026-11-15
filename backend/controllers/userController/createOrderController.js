@@ -23,7 +23,7 @@ const getNextOrderNumber = async (session) => {
   const counter = await Counter.findOneAndUpdate(
     { _id: 'orderNumber' },
     { $inc: { seq: 1 } },
-    { new: true, upsert: true, session }
+    { returnDocument: "after", upsert: true, session }
   );
 
   const orderNumber = ORDER_NUMBER_BASE + counter.seq;

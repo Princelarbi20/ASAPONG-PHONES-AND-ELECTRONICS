@@ -42,7 +42,7 @@ export const resendResetOtpController = async (req, res) => {
       console.error('Password reset email delivery failed.');
       return res.status(200).json(generic);
     }
-    const updated = await PasswordResetOTP.findOneAndUpdate(filter, update, { new: true });
+    const updated = await PasswordResetOTP.findOneAndUpdate(filter, update, { returnDocument: "after" });
     if (!updated) {
       console.error('Password reset resend state changed before the new code could be saved.');
       return res.status(200).json(generic);
