@@ -11,6 +11,8 @@ const OtpVerification = () => {
   const OTP_LENGTH = 6;
   const OTP_EXPIRY_MS = 15 * 60 * 1000;
   const RESEND_COOLDOWN_SECONDS = 60;
+  const location = useLocation();
+  const navigate = useNavigate();
   const [otp, setOtp] = useState(new Array(OTP_LENGTH).fill(''));
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -18,8 +20,6 @@ const OtpVerification = () => {
   const inputRefs = useRef([]);
   const verifyingRef = useRef(false);
   const resendingRef = useRef(false);
-  const location = useLocation();
-  const navigate = useNavigate();
   const dispatch = useDispatch();
 
   // Get email from navigation state
