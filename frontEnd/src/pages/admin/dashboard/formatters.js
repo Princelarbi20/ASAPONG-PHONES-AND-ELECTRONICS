@@ -67,6 +67,7 @@ export const ORDER_STATUSES = [
   "OUT FOR DELIVERY",
   "DELIVERED",
   "CANCELLED",
+  "EXPIRED",
   "RETURN REQUESTED",
   "RETURNED",
   "REFUNDED",
@@ -82,6 +83,7 @@ export const ORDER_STATUS_COLORS = {
   "OUT FOR DELIVERY": "#14b8a6",
   DELIVERED: "#22c55e",
   CANCELLED: "#ef4444",
+  EXPIRED: "#64748b",
   "RETURN REQUESTED": "#ec4899",
   RETURNED: "#ca8a04",
   REFUNDED: "#6b7280",
@@ -97,7 +99,7 @@ export const getStatusTone = (status) => {
   if (["PAID", "SUCCESS", "SUCCESSFUL", "COMPLETED", "DELIVERED"].includes(key))
     return "success";
   if (["PENDING", "AWAITING_PAYMENT"].includes(key)) return "warning";
-  if (["CANCELLED", "CANCELED", "FAILED", "REFUNDED"].includes(key))
+  if (["CANCELLED", "CANCELED", "EXPIRED", "FAILED", "REFUNDED"].includes(key))
     return "danger";
   if (["PROCESSING", "CONFIRMED", "SHIPPED", "OUT_FOR_DELIVERY"].includes(key))
     return "info";

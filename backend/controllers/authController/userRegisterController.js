@@ -5,6 +5,7 @@ import { Register } from '../../modules/userRegister.js';
 import { getOtpExpiryMs, OTP_RESEND_COOLDOWN_MS } from '../../config/otp.js';
 import { buildOtpEmail } from '../../utils/otpEmail.js';
 import { enqueueOtpEmail } from '../../utils/emailOutbox.js';
+import { CACHE_NAMESPACES, invalidateCacheNamespace } from '../../utils/responseCache.js';
 
 export const userRegisterController = async (req, res) => {
   const requestStartedAt = performance.now();
@@ -67,6 +68,7 @@ export const userRegisterController = async (req, res) => {
       await Register.deleteOne({ _id: user._id });
       throw queueError;
     }
+    await invalidateCacheNamespace(CACHE_NAMESPACES.adminUsers);
 
     logPerformance('created_email_queued');
     return res.status(201).json({

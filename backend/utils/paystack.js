@@ -1,6 +1,9 @@
 import { Orders } from "../modules/orderSchema.js";
+import { CACHE_NAMESPACES, invalidateCacheNamespaces } from "./responseCache.js";
 import { PaymentAttempt } from "../modules/paymentAttemptSchema.js";
 import { sendOrderConfirmationEmail } from "./orderEmail.js";
+import { requestPaystackRefund } from './paystackRefunds.js';
+import { expireOnlineOrder } from './orderExpiryWorker.js';
 
 // Paystack transaction status -> order paymentStatus
 export const STATUS_MAP = {
@@ -37,10 +40,11 @@ const getServiceProvider = (payment) => {
 // Calls Paystack's verify endpoint
 export const fetchPaystackTransaction = async (reference) => {
   const response = await fetch(
-    `${process.env.PAYSTACK_BASE_URL}/transaction/verify/${encodeURIComponent(reference)}`,
+    `${String(process.env.PAYSTACK_BASE_URL || 'https://api.paystack.co').replace(/\/+$/, '')}/transaction/verify/${encodeURIComponent(reference)}`,
     {
       method: "GET",
       headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
+      signal: AbortSignal.timeout(10_000),
     }
   );
 
@@ -60,6 +64,23 @@ export const fetchPaystackTransaction = async (reference) => {
 // Applies a verified Paystack transaction to an order.
 // Safe to call many times (verify endpoint + webhook).
 export const applyPaystackPayment = async (order, payment, reference) => {
+  if (!payment || String(payment.reference || '') !== String(reference || '')) {
+    return {
+      ok: false,
+      reason: "REFERENCE_MISMATCH",
+      message: "Verified payment reference does not match the order payment reference.",
+    };
+  }
+
+  const attempt = await PaymentAttempt.findOne({ reference });
+  const orderReference = String(order.paymentDetails?.reference || '');
+  if (attempt && String(attempt.order) !== String(order._id)) {
+    return { ok: false, reason: 'ORDER_REFERENCE_MISMATCH', message: 'Payment reference does not belong to this order.' };
+  }
+  if (!attempt && orderReference !== String(reference)) {
+    return { ok: false, reason: 'ORDER_REFERENCE_MISMATCH', message: 'Payment reference is not associated with this order.' };
+  }
+
   const serviceProvider = getServiceProvider(payment);
   const paystackStatus = String(payment.status || "").toLowerCase();
   const paymentStatus = STATUS_MAP[paystackStatus] || "PENDING";
@@ -77,8 +98,12 @@ export const applyPaystackPayment = async (order, payment, reference) => {
       $set: {
         order: order._id,
         user: order.user?._id || order.user,
-        amount: Number.isFinite(Number(payment.amount)) ? Number(payment.amount) / 100 : order.totalPrice,
-        currency: payment.currency || CURRENCY,
+        amount: Number.isFinite(Number(payment.amount)) ? Math.round(Number(payment.amount) / 100) : order.totalPrice,
+        verifiedAmountSubunits: Number.isSafeInteger(Number(payment.amount)) ? Number(payment.amount) : undefined,
+        verifiedCurrency: typeof payment.currency === 'string' ? payment.currency.toUpperCase() : undefined,
+        // Keep the schema's supported order currency while preserving the exact
+        // provider currency separately for mismatch reconciliation/refunds.
+        currency: CURRENCY,
         paymentMethod: payment.channel || "Paystack",
         serviceProvider,
         provider: "Paystack",
@@ -105,11 +130,14 @@ export const applyPaystackPayment = async (order, payment, reference) => {
     const expectedPesewas = Math.round(Number(order.totalPrice) * 100);
 
     if (paidPesewas !== expectedPesewas || payment.currency !== CURRENCY) {
-      await saveAttempt("FAILED");
+      const mismatchAttempt = await saveAttempt("SUCCESSFUL");
       await PaymentAttempt.updateOne(
         { reference: payment.reference || reference },
         { $set: { gatewayResponse: "Paid amount or currency does not match the order total." } }
       );
+      if (mismatchAttempt?.transactionId && Number.isSafeInteger(paidPesewas) && paidPesewas > 0 && /^[A-Z]{3}$/.test(String(payment.currency || ''))) {
+        await requestPaystackRefund({ order, paymentAttempt: mismatchAttempt, amountSubunits: paidPesewas, currency: payment.currency, reason: 'PAYMENT_MISMATCH' }, { processNow: false });
+      }
       return {
         ok: false,
         reason: "AMOUNT_MISMATCH",
@@ -120,10 +148,32 @@ export const applyPaystackPayment = async (order, payment, reference) => {
     }
   }
 
-  await saveAttempt(attemptStatus);
+  const savedAttempt = await saveAttempt(attemptStatus);
+
+  // A Paystack checkout may finish after an admin has permanently cancelled
+  // the order. Record the verified gateway attempt, but never mark that order paid.
+  const isExpired = order.status === 'EXPIRED'
+    || (order.status === 'PENDING' && order.paymentMethod === 'ONLINE' && order.expiresAt && order.expiresAt <= new Date());
+  if ((order.status === "CANCELLED" || isExpired) && paymentStatus === 'PAID') {
+    if (isExpired && order.status === 'PENDING') await expireOnlineOrder(order._id);
+    const reason = order.status === 'CANCELLED' ? 'CANCELLED_ORDER' : 'EXPIRED_ORDER';
+    if (savedAttempt?.transactionId && Number.isSafeInteger(Number(payment.amount)) && Number(payment.amount) > 0 && /^[A-Z]{3}$/.test(String(payment.currency || ''))) {
+      await requestPaystackRefund({ order, paymentAttempt: savedAttempt, amountSubunits: Number(payment.amount), currency: payment.currency, reason }, { processNow: false });
+    }
+    return {
+      ok: false,
+      reason: order.status === 'CANCELLED' ? "ORDER_CANCELLED" : 'ORDER_EXPIRED',
+      message: `This order has been ${order.status === 'CANCELLED' ? 'cancelled' : 'expired'}; the verified late payment has been recorded for reconciliation.`,
+      paystackStatus,
+      paymentStatus,
+    };
+  }
 
   // 2. Idempotency: never overwrite a PAID order (except for a reversal)
   if (order.paymentStatus === "PAID" && paymentStatus !== "REVERSED") {
+    if (paymentStatus === 'PAID' && savedAttempt?.transactionId && String(order.paymentDetails?.reference || '') !== String(reference)) {
+      await requestPaystackRefund({ order, paymentAttempt: savedAttempt, amountSubunits: Number(payment.amount), currency: payment.currency, reason: 'DUPLICATE_CHARGE' }, { processNow: false });
+    }
     return {
       ok: true,
       skipped: true,
@@ -165,7 +215,12 @@ export const applyPaystackPayment = async (order, payment, reference) => {
   const filter =
     paymentStatus === "REVERSED"
       ? { _id: order._id }
-      : { _id: order._id, paymentStatus: { $ne: "PAID" } };
+      : {
+        _id: order._id,
+        paymentStatus: { $ne: "PAID" },
+        status: { $nin: ["CANCELLED", "EXPIRED"] },
+        $or: [{ expiresAt: { $gt: new Date() } }, { expiresAt: { $exists: false } }],
+      };
 
   const updatedOrder = await Orders.findOneAndUpdate(
     filter,
@@ -176,6 +231,32 @@ export const applyPaystackPayment = async (order, payment, reference) => {
   // Another request already marked it PAID between our read and write
   if (!updatedOrder) {
     const latest = await Orders.findById(order._id);
+    if (latest?.paymentStatus === 'PAID' && paymentStatus === 'PAID'
+      && String(latest.paymentDetails?.reference || '') !== String(reference)
+      && savedAttempt?.transactionId && Number.isSafeInteger(Number(payment.amount)) && Number(payment.amount) > 0
+      && /^[A-Z]{3}$/.test(String(payment.currency || ''))) {
+      await requestPaystackRefund({
+        order: latest,
+        paymentAttempt: savedAttempt,
+        amountSubunits: Number(payment.amount),
+        currency: payment.currency,
+        reason: 'DUPLICATE_CHARGE',
+      }, { processNow: false });
+    }
+    if ((latest?.status === "CANCELLED" || latest?.status === 'EXPIRED' || (latest?.expiresAt && latest.expiresAt <= new Date())) && latest.paymentStatus !== "PAID" && paymentStatus === 'PAID') {
+      if (latest.status === 'PENDING' && latest.paymentMethod === 'ONLINE') await expireOnlineOrder(latest._id);
+      if (savedAttempt?.transactionId && Number.isSafeInteger(Number(payment.amount)) && Number(payment.amount) > 0 && /^[A-Z]{3}$/.test(String(payment.currency || ''))) {
+        await requestPaystackRefund({ order: latest, paymentAttempt: savedAttempt, amountSubunits: Number(payment.amount), currency: payment.currency, reason: latest.status === 'CANCELLED' ? 'CANCELLED_ORDER' : 'EXPIRED_ORDER' }, { processNow: false });
+      }
+      return {
+        ok: false,
+        reason: latest.status === 'CANCELLED' ? "ORDER_CANCELLED" : 'ORDER_EXPIRED',
+        message: "This order was cancelled or expired before its payment could be applied; the payment was recorded for reconciliation.",
+        order: latest,
+        paystackStatus,
+        paymentStatus: latest.paymentStatus,
+      };
+    }
     return {
       ok: true,
       skipped: true,
@@ -184,6 +265,8 @@ export const applyPaystackPayment = async (order, payment, reference) => {
       paymentStatus: latest?.paymentStatus || paymentStatus,
     };
   }
+
+  await invalidateCacheNamespaces(CACHE_NAMESPACES.adminOrders, CACHE_NAMESPACES.userOrders);
 
   // 5. Send the confirmation email exactly once: only the request that
   //    actually flipped the order to PAID gets here.

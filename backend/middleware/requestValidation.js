@@ -53,7 +53,7 @@ export const validators = {
   price: integer({ min: 0, max: 100000000 }),
   stock: integer({ min: 0, max: 1000000 }),
   rating: numericRange({ min: 1, max: 5 }),
-  orderStatus: enumOf('PENDING', 'CONFIRMED', 'PROCESSING', 'PACKED', 'SHIPPED', 'OUT FOR DELIVERY', 'DELIVERED', 'CANCELLED', 'RETURN REQUESTED', 'RETURNED', 'REFUNDED'),
+  orderStatus: enumOf('PENDING', 'CONFIRMED', 'PROCESSING', 'PACKED', 'SHIPPED', 'OUT FOR DELIVERY', 'DELIVERED', 'CANCELLED', 'EXPIRED', 'RETURN REQUESTED', 'RETURNED', 'REFUNDED'),
   paymentMethod: enumOf('COD', 'ONLINE'),
   address: validAddress,
   specifications: validSpecs,

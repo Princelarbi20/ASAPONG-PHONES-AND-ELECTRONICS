@@ -1,4 +1,5 @@
 import { Register } from "../../modules/userRegister.js";
+import { CACHE_NAMESPACES, invalidateCacheNamespace } from "../../utils/responseCache.js";
 export const unsuspendUserController = async (
   req,
   res,
@@ -19,6 +20,7 @@ export const unsuspendUserController = async (
     user.isSuspended = false;
 
     await user.save();
+    await invalidateCacheNamespace(CACHE_NAMESPACES.adminUsers);
 
     res.status(200).json({
       success: true,

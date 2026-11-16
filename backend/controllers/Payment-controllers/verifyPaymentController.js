@@ -1,4 +1,5 @@
 import { Orders } from "../../modules/orderSchema.js";
+import { PaymentAttempt } from '../../modules/paymentAttemptSchema.js';
 import {
   fetchPaystackTransaction,
   applyPaystackPayment,
@@ -15,8 +16,11 @@ export const verifyPaymentController = async (req, res) => {
       });
     }
 
-    // Find the order by the reference saved at initialization
-    const order = await Orders.findOne({ "paymentDetails.reference": reference });
+    // Retry references are retained per attempt; do not assume the newest reference is the only valid one.
+    const attempt = await PaymentAttempt.findOne({ reference }).select('order user');
+    const order = attempt
+      ? await Orders.findById(attempt.order)
+      : await Orders.findOne({ "paymentDetails.reference": reference });
 
     if (!order) {
       return res.status(404).json({
@@ -26,7 +30,7 @@ export const verifyPaymentController = async (req, res) => {
     }
 
     // Optional ownership check (adjust to your auth middleware)
-    if (!req.user || order.user.toString() !== String(req.user.id || req.user._id)) {
+    if (!req.user || String(order.user?._id || order.user) !== String(req.user.id || req.user._id)) {
       return res.status(403).json({
         success: false,
         message: "Forbidden.",

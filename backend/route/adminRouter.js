@@ -2,6 +2,7 @@
 import { getAllUsersController } from "../controllers/adminControllers/getAllUsersController.js";
 import { getAllOrdersController } from "../controllers/adminControllers/getAllOrdersController.js";
 import { updateOrderStatusController } from "../controllers/adminControllers/updateOdersStatus.js";
+import { requestOrderRefundController } from '../controllers/adminControllers/requestOrderRefundController.js';
 import { addProductController } from "../controllers/adminControllers/addProductController.js";
 import { updateProductController } from "../controllers/adminControllers/updateProductController.js";
 import { deleteProductController } from "../controllers/adminControllers/deleteProductController.js";
@@ -23,18 +24,20 @@ import { upload } from "../middleware/upload.js";
 import { validateImages } from "../middleware/validateUploadedFiles.js";
 import express from "express"
 import { validatePaginationQuery, validateRequest, validateNoInputRequest, validators as v } from "../middleware/requestValidation.js";
+import { cacheJsonResponse, CACHE_NAMESPACES } from "../utils/responseCache.js";
 export const adminRouter= express.Router()
 // 5. Admin Routes
-const OrdersStatus = ['PENDING', 'CONFIRMED', 'PROCESSING', 'PACKED', 'SHIPPED', 'OUT FOR DELIVERY', 'DELIVERED', 'CANCELLED', 'RETURN REQUESTED', 'RETURNED', 'REFUNDED'];
+const OrdersStatus = ['PENDING', 'CONFIRMED', 'PROCESSING', 'PACKED', 'SHIPPED', 'OUT FOR DELIVERY', 'DELIVERED', 'CANCELLED', 'EXPIRED', 'RETURN REQUESTED', 'RETURNED', 'REFUNDED'];
 const PaymentStatuses = ['PENDING', 'PAID', 'FAILED', 'ABANDONED', 'REVERSED'];
 const paginationQueryFields = {
   page: (value) => typeof value === 'string' && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 10_000_000,
   limit: (value) => typeof value === 'string' && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 100,
 };
 
-adminRouter.get("/get-all-users",verifyToken,refreshToken,isAdmin,validatePaginationQuery,validateRequest({ query: { ...paginationQueryFields, search: (value) => typeof value === 'string' && value.length <= 100, role: (value) => value === '' || ['USER', 'ADMIN', 'DEALER'].includes(value), accountStatus: (value) => value === '' || ['active', 'inactive'].includes(value), sortBy: (value) => value === '' || ['date', 'id', 'name', 'email', 'role', 'status'].includes(value), sortOrder: (value) => value === '' || ['asc', 'desc'].includes(value), dateFrom: (value) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value), dateTo: (value) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value) }, body: {} }),getAllUsersController);
-adminRouter.get("/get-all-orders", verifyToken, refreshToken, isAdmin, validatePaginationQuery, validateRequest({ query: { ...paginationQueryFields, search: (value) => typeof value === 'string' && value.length <= 100, status: (value) => value === '' || OrdersStatus.includes(value), paymentStatus: (value) => value === '' || PaymentStatuses.includes(value), paymentMethod: (value) => typeof value === 'string' && value.length <= 50, sortBy: (value) => value === '' || ['date', 'id', 'amount', 'status', 'paymentStatus'].includes(value), sortOrder: (value) => value === '' || ['asc', 'desc'].includes(value), dateFrom: (value) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value), dateTo: (value) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value) }, body: {} }), getAllOrdersController);
+adminRouter.get("/get-all-users",verifyToken,refreshToken,isAdmin,validatePaginationQuery,validateRequest({ query: { ...paginationQueryFields, search: (value) => typeof value === 'string' && value.length <= 100, role: (value) => value === '' || ['USER', 'ADMIN', 'DEALER'].includes(value), accountStatus: (value) => value === '' || ['active', 'inactive'].includes(value), sortBy: (value) => value === '' || ['date', 'id', 'name', 'email', 'role', 'status'].includes(value), sortOrder: (value) => value === '' || ['asc', 'desc'].includes(value), dateFrom: (value) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value), dateTo: (value) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value) }, body: {} }),cacheJsonResponse({ namespace: CACHE_NAMESPACES.adminUsers, privateScope: 'admin' }),getAllUsersController);
+adminRouter.get("/get-all-orders", verifyToken, refreshToken, isAdmin, validatePaginationQuery, validateRequest({ query: { ...paginationQueryFields, search: (value) => typeof value === 'string' && value.length <= 100, status: (value) => value === '' || OrdersStatus.includes(value), paymentStatus: (value) => value === '' || PaymentStatuses.includes(value), paymentMethod: (value) => typeof value === 'string' && value.length <= 50, sortBy: (value) => value === '' || ['date', 'id', 'amount', 'status', 'paymentStatus'].includes(value), sortOrder: (value) => value === '' || ['asc', 'desc'].includes(value), dateFrom: (value) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value), dateTo: (value) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value) }, body: {} }), cacheJsonResponse({ namespace: CACHE_NAMESPACES.adminOrders, privateScope: 'admin' }), getAllOrdersController);
 adminRouter.put("/update-orders/:id",verifyToken,refreshToken,isAdmin,validateRequest({ params: { "id*": v.objectId }, body: { "status*": v.orderStatus }, query: {} }),updateOrderStatusController);
+adminRouter.post('/orders/:id/refund', verifyToken, refreshToken, isAdmin, validateRequest({ params: { 'id*': v.objectId }, body: {}, query: {} }), requestOrderRefundController);
 const validateDashboardRange = validateRequest({ query: { days: (value) => ['7', '30', '90'].includes(value) }, body: {} });
 adminRouter.get("/dashboard-charts",verifyToken,refreshToken,isAdmin,validateDashboardRange,getDashboardStatsController);
 // Admin Product Management

@@ -1,11 +1,13 @@
 import crypto from "crypto";
 import { Orders } from "../../modules/orderSchema.js";
+import { PaymentAttempt } from '../../modules/paymentAttemptSchema.js';
+import { reconcilePaystackRefund } from '../../utils/paystackRefunds.js';
 import {
   fetchPaystackTransaction,
   applyPaystackPayment,
 } from "../../utils/paystack.js";
 
-const HANDLED_EVENTS = ["charge.success", "charge.failed"];
+const HANDLED_EVENTS = ["charge.success", "charge.failed", "refund.pending", "refund.processing", "refund.processed", "refund.failed"];
 
 export const paystackWebhookController = async (req, res) => {
   try {
@@ -48,17 +50,26 @@ export const paystackWebhookController = async (req, res) => {
       return res.sendStatus(200);
     }
 
+    if (event.event.startsWith('refund.')) {
+      const refundReference = event.data?.reference;
+      if (typeof refundReference === 'string') await reconcilePaystackRefund(refundReference);
+      return res.sendStatus(200);
+    }
+
     const reference = event.data?.reference;
     if (typeof reference !== "string" || !/^[A-Za-z0-9_-]{8,120}$/.test(reference)) {
       return res.status(400).json({ success: false, message: "Invalid payment reference." });
     }
 
-    // 3. Find the order by reference, falling back to metadata.orderId
-    let order = await Orders.findOne({ "paymentDetails.reference": reference });
+    // Locate the exact attempt first so older retry references remain bound to their original order.
+    const attempt = await PaymentAttempt.findOne({ reference }).select('order');
+    let order = attempt ? await Orders.findById(attempt.order) : await Orders.findOne({ "paymentDetails.reference": reference });
 
     if (!order && event.data?.metadata?.orderId) {
       order = await Orders.findById(event.data.metadata.orderId);
     }
+
+    if (attempt && String(attempt.order) !== String(order?._id)) return res.sendStatus(200);
 
     if (!order) {
       console.warn(`Paystack webhook: no order found for reference ${reference}`);

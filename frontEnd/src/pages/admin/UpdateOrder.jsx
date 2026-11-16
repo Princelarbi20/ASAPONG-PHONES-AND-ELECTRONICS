@@ -43,6 +43,7 @@ export default function UpdateOrder({ orderId, currentStatus, onStatusUpdated })
    <option value="OUT FOR DELIVERY">Out for Delivery</option>
    <option value="DELIVERED">Delivered</option>
    <option value="CANCELLED">Cancelled</option>
+   <option value="EXPIRED" disabled>Expired</option>
    <option value="RETURN REQUESTED">Return Requested</option>
    <option value="RETURNED">Returned</option>
    <option value="REFUNDED">Refunded</option>

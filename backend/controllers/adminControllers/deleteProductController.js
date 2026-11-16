@@ -3,6 +3,7 @@ import { Product } from "../../modules/productSchema.js";
 import fs from "fs";
 import path from "path";
 import { destroyCloudinaryAsset, destroyCloudinaryAssetByPublicId, isCloudinaryUrl } from "../../utils/cloudinaryHelpers.js";
+import { CACHE_NAMESPACES, invalidateCacheNamespace } from "../../utils/responseCache.js";
 
 export const deleteProductController = async (req, res, next) => {
   try {
@@ -20,6 +21,7 @@ export const deleteProductController = async (req, res, next) => {
 
     // 2. Remove the database record first so a failed DB operation cannot leave it pointing at deleted images.
     await Product.findByIdAndDelete(id);
+    await invalidateCacheNamespace(CACHE_NAMESPACES.products);
 
     // 3. Delete images from Cloudinary by explicit public IDs first
     if (Array.isArray(product.imagePublicIds) && product.imagePublicIds.length > 0) {

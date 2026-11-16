@@ -3,7 +3,7 @@ import { Orders } from "../../modules/orderSchema.js";
 import { Register } from "../../modules/userRegister.js";
 import { getPagination, paginationResult } from "../../utils/pagination.js";
 
-const ORDER_STATUSES = ["PENDING", "CONFIRMED", "PROCESSING", "PACKED", "SHIPPED", "OUT FOR DELIVERY", "DELIVERED", "CANCELLED", "RETURN REQUESTED", "RETURNED", "REFUNDED"];
+const ORDER_STATUSES = ["PENDING", "CONFIRMED", "PROCESSING", "PACKED", "SHIPPED", "OUT FOR DELIVERY", "DELIVERED", "CANCELLED", "EXPIRED", "RETURN REQUESTED", "RETURNED", "REFUNDED"];
 const PAYMENT_STATUSES = ["PENDING", "PAID", "FAILED", "ABANDONED", "REVERSED"];
 const SORT_FIELDS = { date: "createdAt", id: "_id", amount: "totalPrice", status: "status", paymentStatus: "paymentStatus" };
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

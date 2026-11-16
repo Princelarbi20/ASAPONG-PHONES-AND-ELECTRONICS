@@ -6,6 +6,9 @@ import { formatPrice } from '@/lib/utils';
 import { useSelector, useDispatch } from 'react-redux';
 import { authAction } from '@/redux/store';
 
+const getDisplayProductName = (name) =>
+  typeof name === 'string' ? name.replace(/^\s*the\s+/i, '').trim() : name;
+
 // Isolated Performance Image Slider Component with rigid single viewport bounds
 function ProductImageSlider({ images, isSoldOut, altText, productId }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -479,6 +482,7 @@ export default function CategoryGrid({
                 {filteredCategoryProducts.map((product, index) => {
                   const id = product._id || product.id;
                   const isSoldOut = product.stock <= 0;
+                  const displayName = getDisplayProductName(product.name);
 
                   return (
                     <div
@@ -496,7 +500,7 @@ export default function CategoryGrid({
                         <ProductImageSlider
                           images={product.images}
                           isSoldOut={isSoldOut}
-                          altText={product.name}
+                          altText={displayName}
                           productId={id}
                         />
 
@@ -538,7 +542,7 @@ export default function CategoryGrid({
                       <div className="flex flex-col text-left mt-4 space-y-1">
                         <h3 className="text-xs sm:text-[13px] font-semibold text-gray-800 line-clamp-2 leading-tight group-hover:text-rose-800 transition-colors duration-150 min-h-[2.25rem]">
                           <Link to={`/product-details/${id}`} className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-700">
-                          {product.name}
+                          {displayName}
                           </Link>
                         </h3>
                         <div className="flex items-baseline gap-1.5 pt-1">

@@ -54,7 +54,8 @@ export const getUserOrdersController = async (req, res, next) => {
       // Frontend can show a "Pay now" button when this is true
       obj.canPay =
         ["PENDING", "FAILED", "ABANDONED"].includes(obj.paymentStatus) &&
-        obj.status !== "CANCELLED";
+        !["CANCELLED", "EXPIRED"].includes(obj.status) &&
+        !(obj.expiresAt && new Date(obj.expiresAt) <= new Date());
 
       return obj;
     });

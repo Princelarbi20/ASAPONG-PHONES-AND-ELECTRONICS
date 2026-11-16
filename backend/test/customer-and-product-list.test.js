@@ -196,7 +196,7 @@ test('authenticated checkout stores the authenticated user and customer snapshot
   assert.equal(createdOrder.customerEmail, 'ama@example.com');
 });
 
-test('payment initialization persists the order customer ID and snapshot on the transaction', async (t) => {
+test('payment initialization supports a failed-payment retry and persists its customer snapshot', async (t) => {
   const userId = '64b000000000000000000006';
   const orderId = '64b000000000000000000007';
   const order = {
@@ -204,9 +204,11 @@ test('payment initialization persists the order customer ID and snapshot on the 
     user: { _id: userId, userName: 'Yaw Buyer', email: 'yaw@example.com' },
     customerType: 'REGISTERED',
     totalPrice: 120,
-    paymentStatus: 'PENDING',
+    status: 'PENDING',
+    paymentStatus: 'FAILED',
   };
   let createdAttempt;
+  let paymentOrderFilter;
   const previousEnv = Object.fromEntries(['NODE_ENV', 'PAYSTACK_SECRET_KEY', 'PAYSTACK_BASE_URL', 'CLIENT_URL', 'FRONTEND_ORIGIN'].map((key) => [key, process.env[key]]));
   t.after(() => {
     for (const [key, value] of Object.entries(previousEnv)) {
@@ -223,7 +225,7 @@ test('payment initialization persists the order customer ID and snapshot on the 
   globalThis.fetch = async () => ({ ok: true, text: async () => JSON.stringify({ status: true, data: { reference: 'payment-reference-123' } }) });
   t.after(() => { globalThis.fetch = originalFetch; });
   stub(t, Orders, 'findById', () => ({ populate: async () => order }));
-  stub(t, Orders, 'findByIdAndUpdate', async () => ({}));
+  stub(t, Orders, 'findOneAndUpdate', async (filter) => { paymentOrderFilter = filter; return {}; });
   stub(t, PaymentAttempt, 'create', async (attempt) => {
     createdAttempt = { ...attempt, _id: '64b000000000000000000008' };
     return createdAttempt;
@@ -237,4 +239,7 @@ test('payment initialization persists the order customer ID and snapshot on the 
   assert.equal(createdAttempt.customerType, 'REGISTERED');
   assert.equal(createdAttempt.customerName, 'Yaw Buyer');
   assert.equal(createdAttempt.customerEmail, 'yaw@example.com');
+  assert.ok(paymentOrderFilter.status.$nin.includes('CANCELLED'));
+  assert.ok(paymentOrderFilter.status.$nin.includes('EXPIRED'));
+  assert.equal(paymentOrderFilter.paymentStatus.$ne, 'PAID');
 });

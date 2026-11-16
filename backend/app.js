@@ -1,6 +1,6 @@
+import './config/loadEnvironment.js';
 import connectDB from './config/db.js';
 import express from 'express';
-import dotenv from 'dotenv';
 import errorHandler from './middleware/errorHandler.js';
 import cors from "cors";
 import path from 'path';
@@ -22,11 +22,11 @@ import { validateRequest } from './middleware/requestValidation.js';
 import { assertTestEnvironment } from './config/environmentSafety.js';
 import { randomUUID } from 'node:crypto';
 import { startEmailOutboxWorker } from './utils/emailOutbox.js';
+import { startOrderExpiryWorker } from './utils/orderExpiryWorker.js';
+import { startPaystackRefundWorker } from './utils/paystackRefunds.js';
+import { PaystackRefund } from './modules/paystackRefundSchema.js';
 import { getTrustedOrigins } from './config/trustedOrigins.js';
 const app = express();
-// Resolve the backend env file from this module's location so startup works
-// whether the app is launched from backend/ or from the repository root.
-dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '.env') });
 assertTestEnvironment();
 
 
@@ -148,7 +148,12 @@ const startServer = async () => {
   const startedAt = performance.now();
   try {
     await connectDB();
+    // The unique paymentAttempt index is the final database guard against
+    // multiple refund records being created by simultaneous workers.
+    await PaystackRefund.createIndexes();
     startEmailOutboxWorker();
+    startOrderExpiryWorker();
+    startPaystackRefundWorker();
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server is running on port ${PORT}`);
       console.info('[performance] app_ready', JSON.stringify({

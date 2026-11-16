@@ -22,6 +22,10 @@ const orderSchema = new mongoose.Schema(
     },
     customerName: { type: String, trim: true, maxlength: 80 },
     customerEmail: { type: String, trim: true, lowercase: true, maxlength: 254 },
+    paymentMethod: { type: String, enum: ["ONLINE", "COD"] },
+    expiresAt: { type: Date, default: undefined },
+    expiredAt: { type: Date, default: undefined },
+    inventoryReleasedAt: { type: Date, default: undefined },
 
     items: [
       {
@@ -62,6 +66,7 @@ const orderSchema = new mongoose.Schema(
         "OUT FOR DELIVERY",
         "DELIVERED",
         "CANCELLED",
+        "EXPIRED",
         "RETURN REQUESTED",
         "RETURNED",
         "REFUNDED",
@@ -104,6 +109,7 @@ const orderSchema = new mongoose.Schema(
 orderSchema.index({ createdAt: -1, _id: -1 });
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ paymentStatus: 1, createdAt: -1 });
+orderSchema.index({ status: 1, paymentMethod: 1, paymentStatus: 1, expiresAt: 1 });
 orderSchema.index({ totalPrice: 1, _id: 1 });
 
 export const Orders = mongoose.model("Orders", orderSchema);

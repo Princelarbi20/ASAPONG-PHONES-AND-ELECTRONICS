@@ -9,6 +9,7 @@ const transitions = {
   'RETURN REQUESTED': ['RETURNED', 'DELIVERED'],
   RETURNED: ['REFUNDED'],
   CANCELLED: [],
+  EXPIRED: [],
   REFUNDED: [],
 };
 

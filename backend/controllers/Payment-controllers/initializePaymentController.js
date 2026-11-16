@@ -3,6 +3,7 @@ import { Orders } from "../../modules/orderSchema.js";
 import { PaymentAttempt } from "../../modules/paymentAttemptSchema.js";
 import { Register } from "../../modules/userRegister.js";
 import { getPaystackConfig } from "../../utils/paystackConfig.js";
+import { CACHE_NAMESPACES, invalidateCacheNamespaces } from "../../utils/responseCache.js";
 
 export const initializePaymentController = async (req, res) => {
   let attempt;
@@ -41,12 +42,31 @@ export const initializePaymentController = async (req, res) => {
       });
     }
 
+    if (order.status === "CANCELLED") {
+      return res.status(409).json({
+        success: false,
+        message: "This order has been cancelled and cannot be paid.",
+      });
+    }
+
+    if (order.status === 'EXPIRED' || (order.paymentMethod === 'ONLINE' && order.expiresAt && order.expiresAt <= new Date())) {
+      return res.status(409).json({ success: false, message: 'This order has expired and cannot be paid.' });
+    }
+
+    if (!["PENDING", "FAILED", "ABANDONED"].includes(order.paymentStatus)) {
+      return res.status(409).json({
+        success: false,
+        message: "This order is not eligible for a payment attempt.",
+      });
+    }
+
     const customer = order.user?.email ? order.user : await Register.findById(orderUserId).select("userName email");
     const email = customer?.email || order.customerEmail;
     const wholeAmount = Math.round(Number(order.totalPrice));
     if (Number.isFinite(wholeAmount) && wholeAmount !== Number(order.totalPrice)) {
       order.totalPrice = wholeAmount;
       await order.save();
+      await invalidateCacheNamespaces(CACHE_NAMESPACES.adminOrders, CACHE_NAMESPACES.userOrders);
     }
     const amountInPesewas = wholeAmount * 100;
 
@@ -174,8 +194,13 @@ export const initializePaymentController = async (req, res) => {
       },
     });
 
-    await Orders.findByIdAndUpdate(
-      order._id,
+    const updatedOrder = await Orders.findOneAndUpdate(
+      {
+        _id: order._id,
+        status: { $nin: ["CANCELLED", "EXPIRED"] },
+        paymentStatus: { $ne: "PAID" },
+        $or: [{ expiresAt: { $gt: new Date() } }, { expiresAt: { $exists: false } }],
+      },
       {
         $set: {
           paymentStatus: "PENDING",
@@ -186,6 +211,31 @@ export const initializePaymentController = async (req, res) => {
       },
       { runValidators: true }
     );
+    if (!updatedOrder) {
+      const latestOrder = await Orders.findById(order._id).select("status paymentStatus expiresAt");
+      const wasPaid = latestOrder?.paymentStatus === "PAID";
+      const wasCancelled = latestOrder?.status === "CANCELLED";
+      const wasExpired = latestOrder?.status === 'EXPIRED' || (latestOrder?.expiresAt && latestOrder.expiresAt <= new Date());
+      await PaymentAttempt.findByIdAndUpdate(attempt._id, {
+        $set: {
+          status: "FAILED",
+          gatewayResponse: wasPaid
+            ? "Order was paid while payment was being initialized."
+            : wasExpired ? "Order expired while payment was being initialized." : "Order was cancelled while payment was being initialized.",
+          metadata: { stage: "initialization", reason: wasPaid ? "ORDER_ALREADY_PAID" : wasExpired ? "ORDER_EXPIRED" : "ORDER_CANCELLED" },
+          completedAt: new Date(),
+        },
+      });
+      return res.status(wasPaid ? 400 : 409).json({
+        success: false,
+        message: wasPaid
+          ? "This order has already been paid."
+          : wasCancelled || wasExpired
+            ? `This order was ${wasExpired ? 'expired' : 'cancelled'} and cannot be paid.`
+            : "This order changed while payment was being initialized. Please refresh and try again.",
+      });
+    }
+    await invalidateCacheNamespaces(CACHE_NAMESPACES.adminOrders, CACHE_NAMESPACES.userOrders);
 
     return res.status(200).json({
       success: true,

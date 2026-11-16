@@ -42,6 +42,7 @@ export const MyOrders = () => {
             case 'PENDING':
                 return 'bg-gray-50 text-gray-600 border-gray-200';
             case 'CANCELLED':
+            case 'EXPIRED':
             case 'RETURNED':
             case 'REFUNDED':
             case 'RETURN REQUESTED':

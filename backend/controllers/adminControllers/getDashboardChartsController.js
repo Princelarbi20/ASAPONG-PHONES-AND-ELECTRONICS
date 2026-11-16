@@ -9,7 +9,7 @@ import { Orders } from '../../modules/orderSchema.js';
 // An order counts as revenue when its paymentStatus is one of these...
 const PAID_PAYMENT_STATUSES = ['PAID', 'SUCCESS', 'COMPLETED'];
 // ...and its order status is NOT one of these.
-const CANCELLED_STATUSES = ['CANCELLED', 'CANCELED', 'REFUNDED', 'FAILED'];
+const CANCELLED_STATUSES = ['CANCELLED', 'CANCELED', 'EXPIRED', 'REFUNDED', 'FAILED'];
 
 // Products at or below this stock level are "low stock".
 const LOW_STOCK_THRESHOLD = 5;

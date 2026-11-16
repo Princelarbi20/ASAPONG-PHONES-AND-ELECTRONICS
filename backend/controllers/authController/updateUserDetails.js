@@ -1,4 +1,5 @@
 import { Register } from "../../modules/userRegister.js";
+import { CACHE_NAMESPACES, invalidateCacheNamespace } from "../../utils/responseCache.js";
 
 export const updateUserController = async (req, res) => {
     try {
@@ -45,6 +46,7 @@ export const updateUserController = async (req, res) => {
                 message: "User not found."
             });
         }
+        await invalidateCacheNamespace(CACHE_NAMESPACES.adminUsers);
 
         // 4. Send back the updated profile details
         return res.status(200).json({

@@ -2,6 +2,7 @@ import { Product } from "../../modules/productSchema.js";
 import { normalizeUploadedImagePaths } from "../../utils/normalizeImagePaths.js";
 import { getCloudinaryUploadMeta } from "../../utils/cloudinaryHelpers.js";
 import { commitUploadedFiles } from "../../utils/uploadCleanup.js";
+import { CACHE_NAMESPACES, invalidateCacheNamespace } from "../../utils/responseCache.js";
 
 export const addProductController = async (req, res, next) => {
   try {
@@ -88,6 +89,8 @@ export const addProductController = async (req, res, next) => {
         });
       }
 
+      await invalidateCacheNamespace(CACHE_NAMESPACES.products);
+
       commitUploadedFiles(req);
 
       return res.status(200).json({
@@ -112,6 +115,8 @@ export const addProductController = async (req, res, next) => {
         specifications: parsedSpecifications,
         newArrival: isNewArrival,
       });
+
+      await invalidateCacheNamespace(CACHE_NAMESPACES.products);
 
       commitUploadedFiles(req);
 

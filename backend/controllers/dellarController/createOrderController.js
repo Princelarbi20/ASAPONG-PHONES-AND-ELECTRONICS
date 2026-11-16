@@ -1,6 +1,7 @@
 import { Register } from "../../modules/userRegister.js";
 import { Product } from "../../modules/productSchema.js";
 import { Orders } from "../../modules/orderSchema.js";
+import { CACHE_NAMESPACES, invalidateCacheNamespaces } from "../../utils/responseCache.js";
 export const createOrderController = async (
   req,
   res,
@@ -63,6 +64,7 @@ export const createOrderController = async (
       items,
       totalPrice,
     });
+    await invalidateCacheNamespaces(CACHE_NAMESPACES.products, CACHE_NAMESPACES.adminOrders, CACHE_NAMESPACES.userOrders);
 
     user.cart = [];
     await user.save();

@@ -2,6 +2,7 @@ import { ShopRequest } from "../../modules/shopRequestSchema.js";
 import { Product } from "../../modules/productSchema.js";
 import { commitUploadedFiles } from "../../utils/uploadCleanup.js";
 import { getCloudinaryUploadMeta } from "../../utils/cloudinaryHelpers.js";
+import { CACHE_NAMESPACES, invalidateCacheNamespace } from "../../utils/responseCache.js";
 export const addProductDealerController = async (req, res, next) => {
   try {
     const { name, description, price, category, stock, brand, rating } = req.body;
@@ -57,6 +58,7 @@ export const addProductDealerController = async (req, res, next) => {
       shop: userShop.shopName, 
       status: "PENDING" 
     });
+    await invalidateCacheNamespace(CACHE_NAMESPACES.products);
 
     commitUploadedFiles(req);
     return res.status(201).json({

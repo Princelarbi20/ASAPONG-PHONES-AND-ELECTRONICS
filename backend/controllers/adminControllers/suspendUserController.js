@@ -1,6 +1,7 @@
 import { Register } from "../../modules/userRegister.js";
 import sendEmail from "../../utils/nodemailer.js";
 import { escapeHtml } from "../../utils/escapeHtml.js";
+import { CACHE_NAMESPACES, invalidateCacheNamespace } from "../../utils/responseCache.js";
 
 export const suspendUserController = async (req,res,next) => {
   try {
@@ -19,6 +20,7 @@ export const suspendUserController = async (req,res,next) => {
     user.tokenVersion = (user.tokenVersion || 0) + 1;
 
     await user.save();
+    await invalidateCacheNamespace(CACHE_NAMESPACES.adminUsers);
 
     await sendEmail({
             from: process.env.EMAIL_USER,

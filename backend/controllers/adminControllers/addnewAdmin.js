@@ -1,5 +1,6 @@
 import { Register } from "../../modules/userRegister.js";
 import bcrypt from 'bcrypt';
+import { CACHE_NAMESPACES, invalidateCacheNamespace } from "../../utils/responseCache.js";
 
 export const addnewAdmin = async (req, res) => {
   try {
@@ -39,6 +40,7 @@ export const addnewAdmin = async (req, res) => {
       role,
       isVerified: true,
     });
+    await invalidateCacheNamespace(CACHE_NAMESPACES.adminUsers);
 
     // Do not return a credential for another account in this response.
     return res.status(201).json({

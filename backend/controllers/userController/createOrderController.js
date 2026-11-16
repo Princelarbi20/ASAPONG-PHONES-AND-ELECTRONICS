@@ -3,6 +3,8 @@ import { Product } from '../../modules/productSchema.js';
 import { Orders } from '../../modules/orderSchema.js';
 import { Counter } from '../../modules/counterSchema.js';
 import { sendCashOnDeliveryOrderEmail } from '../../utils/orderEmail.js';
+import { CACHE_NAMESPACES, invalidateCacheNamespaces } from '../../utils/responseCache.js';
+import { UNPAID_ORDER_EXPIRY_MS } from '../../config/orderLifecycle.js';
 
 const fail = (statusCode, message) => {
   const error = new Error(message);
@@ -122,6 +124,8 @@ export const createOrderController = async (req, res, next) => {
             user: req.user.id,
             customerName: user.userName,
             customerEmail: user.email,
+            paymentMethod,
+            ...(paymentMethod === 'ONLINE' ? { expiresAt: new Date(Date.now() + UNPAID_ORDER_EXPIRY_MS) } : {}),
             items,
             totalPrice,
             status: 'PENDING',
@@ -141,6 +145,10 @@ export const createOrderController = async (req, res, next) => {
       orderId = order._id;
       await RegisterModel.findByIdAndUpdate(req.user.id, { $set: { cart: [] } }, { session });
     });
+
+    if (!reusedExisting) {
+      await invalidateCacheNamespaces(CACHE_NAMESPACES.products, CACHE_NAMESPACES.adminOrders, CACHE_NAMESPACES.userOrders);
+    }
 
     const order = await populateOrder(orderId);
 

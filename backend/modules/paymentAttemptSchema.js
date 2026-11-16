@@ -24,6 +24,8 @@ const paymentAttemptSchema = new mongoose.Schema(
     provider: { type: String, required: true, default: "Paystack", trim: true },
     reference: { type: String, required: true, unique: true, index: true, trim: true, minlength: 8, maxlength: 120 },
     transactionId: { type: String, index: true, sparse: true },
+    verifiedAmountSubunits: { type: Number, min: 0, validate: Number.isInteger },
+    verifiedCurrency: { type: String, uppercase: true, trim: true, maxlength: 3 },
     status: {
       type: String,
       enum: ["PENDING", "SUCCESSFUL", "FAILED", "REFUNDED", "ABANDONED"],
@@ -32,6 +34,10 @@ const paymentAttemptSchema = new mongoose.Schema(
     },
     gatewayStatus: String,
     gatewayResponse: String,
+    refundStatus: { type: String, enum: ["REQUESTED", "PENDING", "PROCESSING", "PROCESSED", "FAILED", "NEEDS_ATTENTION"] },
+    refundReference: { type: String, maxlength: 64 },
+    refundId: { type: String, maxlength: 32 },
+    refundedAt: Date,
     metadata: { type: mongoose.Schema.Types.Mixed, default: undefined },
     completedAt: Date,
   },
@@ -39,5 +45,6 @@ const paymentAttemptSchema = new mongoose.Schema(
 );
 
 paymentAttemptSchema.index({ createdAt: -1 });
+paymentAttemptSchema.index({ refundStatus: 1, updatedAt: 1 });
 
 export const PaymentAttempt = mongoose.model("PaymentAttempt", paymentAttemptSchema);

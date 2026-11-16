@@ -4,6 +4,7 @@ import { normalizeUploadedImagePaths } from "../../utils/normalizeImagePaths.js"
 import { getCloudinaryUploadMeta } from "../../utils/cloudinaryHelpers.js";
 import { destroyCloudinaryAssetByPublicId, getCloudinaryPublicId } from "../../utils/cloudinaryHelpers.js";
 import { commitUploadedFiles } from "../../utils/uploadCleanup.js";
+import { CACHE_NAMESPACES, invalidateCacheNamespace } from "../../utils/responseCache.js";
 
 export const updateProductController = async (req, res, next) => {
   try {
@@ -84,6 +85,8 @@ export const updateProductController = async (req, res, next) => {
     if (!updatedProduct) {
       return res.status(404).json({ success: false, message: "Product not found." });
     }
+
+    await invalidateCacheNamespace(CACHE_NAMESPACES.products);
 
     commitUploadedFiles(req);
     await Promise.all(removedPublicIds.map((publicId) => destroyCloudinaryAssetByPublicId(publicId).catch((error) => {
