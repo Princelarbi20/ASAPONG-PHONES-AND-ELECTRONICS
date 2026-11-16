@@ -22,7 +22,7 @@ import { validateRequest } from './middleware/requestValidation.js';
 import { assertTestEnvironment } from './config/environmentSafety.js';
 import { randomUUID } from 'node:crypto';
 import { startEmailOutboxWorker } from './utils/emailOutbox.js';
-
+import { getTrustedOrigins } from './config/trustedOrigins.js';
 const app = express();
 // Resolve the backend env file from this module's location so startup works
 // whether the app is launched from backend/ or from the repository root.
@@ -47,14 +47,55 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // CORS (fixed: removed the leading space in the fallback origin)
+// CORS (fixed: removed the leading space in the fallback origin)
+
+// CORS configuration
+// Use validated frontend origins instead of passing raw environment values.
+const trustedOrigins = getTrustedOrigins();
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
+    origin: (origin, callback) => {
+      // Allow requests without an Origin header (e.g. server-to-server).
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Allow only explicitly trusted frontend domains.
+      if (trustedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // Do not allow untrusted origins.
+      return callback(null, false);
+    },
+
     credentials: true,
-    exposedHeaders: ['X-Request-ID'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
+
+    methods: [
+      'GET',
+      'HEAD',
+      'POST',
+      'PUT',
+      'PATCH',
+      'DELETE',
+      'OPTIONS',
+    ],
+
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-CSRF-Token',
+    ],
+
+    exposedHeaders: [
+      'X-Request-ID',
+    ],
+
+    optionsSuccessStatus: 204,
   })
 );
+
 
 
 app.post('/api/v1/payments/webhook',express.raw({ type: 'application/json' }),validateRequest({ query: {} }),paystackWebhookController);
