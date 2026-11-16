@@ -110,6 +110,9 @@ export const userLoginController = async (req, res) => {
             }
 
             // Generate Tokens
+            // accountType identifies the backing account model. Admins created
+            // in the Users collection therefore correctly have USER here;
+            // their ADMIN privilege is carried independently by role.
             issueAuthTokens(res, regularUser, "USER");
 
             return res.status(200).json({

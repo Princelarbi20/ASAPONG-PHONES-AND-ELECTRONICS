@@ -10,26 +10,15 @@ export const API_BASE = API_ENDPOINT_BASE;
 export const DASHBOARD_STATS_URL = `${API_BASE}/dashboard-stats`;
 export const DASHBOARD_CHARTS_URL = `${API_BASE}/dashboard-charts`;
 
-const getAuthToken = () => {
-  try {
-    return localStorage.getItem('token');
-  } catch {
-    return null;
-  }
-};
-
 /* ------------------------------------------------------------------ */
 
 const REQUIRED_SECTIONS = ['summary', 'revenue', 'orders', 'products'];
 
 export const fetchDashboardStats = async (days = 30, signal) => {
-  const token = getAuthToken();
-
   const { data } = await axiosInstance.get('/dashboard-stats', {
     params: { days },
     signal,
     withCredentials: true,
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
 
   if (!data?.success || !data?.stats) {

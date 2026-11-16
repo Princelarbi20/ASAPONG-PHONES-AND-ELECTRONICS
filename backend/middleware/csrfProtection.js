@@ -1,11 +1,10 @@
 import crypto from 'node:crypto';
 import { isTrustedOrigin } from '../config/trustedOrigins.js';
+import { getAuthCookieAttributes } from '../utils/authCookies.js';
 
 const cookieOptions = {
+  ...getAuthCookieAttributes(),
   httpOnly: false,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-  path: '/'
 };
 
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;

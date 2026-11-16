@@ -1,3 +1,5 @@
+import { isCrossSiteCookieDeployment } from '../config/deploymentEnvironment.js';
+
 export const parseExpiryToMs = (value) => {
     const match = typeof value === 'string' && value.match(/^([1-9]\d*)([smhd])$/i);
     if (!match) throw new Error('Token expiry must use a positive duration such as 15m, 12h, or 7d.');
@@ -11,11 +13,18 @@ export const parseExpiryToMs = (value) => {
     return milliseconds;
 };
 
+export const getAuthCookieAttributes = () => {
+    const crossSiteDeployment = isCrossSiteCookieDeployment();
+    return {
+        httpOnly: true,
+        secure: crossSiteDeployment,
+        sameSite: crossSiteDeployment ? 'none' : 'lax',
+        path: '/',
+    };
+};
+
 const cookieOptions = (maxAge) => ({
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    path: '/',
+    ...getAuthCookieAttributes(),
     maxAge,
 });
 
@@ -25,12 +34,7 @@ export const setAuthCookies = (res, accessToken, refreshToken) => {
 };
 
 export const clearAuthCookies = (res) => {
-    const options = {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        path: '/',
-    };
+    const options = getAuthCookieAttributes();
     res.clearCookie('accessToken', options);
     res.clearCookie('refreshToken', options);
 };

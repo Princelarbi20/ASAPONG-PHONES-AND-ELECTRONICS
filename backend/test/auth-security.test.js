@@ -14,12 +14,12 @@ import { getTrustedOrigins, isTrustedOrigin } from '../config/trustedOrigins.js'
 import { clearAuthCookies, parseExpiryToMs, setAuthCookies } from '../utils/authCookies.js';
 import { getPaymentFailureRetryUrl } from '../utils/orderEmail.js';
 
-const envKeys = ['NODE_ENV', 'FRONTEND_ORIGIN', 'ACCESS_TOKEN_SECRET', 'REFRESH_TOKEN_SECRET', 'ACCESS_TOKEN_EXPIRE', 'REFRESH_TOKEN_EXPIRE'];
+const envKeys = ['NODE_ENV', 'FRONTEND_ORIGIN', 'RENDER_EXTERNAL_URL', 'ACCESS_TOKEN_SECRET', 'REFRESH_TOKEN_SECRET', 'ACCESS_TOKEN_EXPIRE', 'REFRESH_TOKEN_EXPIRE'];
 const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
 
 before(() => {
   process.env.NODE_ENV = 'test';
-  process.env.FRONTEND_ORIGIN = 'https://shop.example';
+  process.env.FRONTEND_ORIGIN = 'http://localhost:5173';
   process.env.ACCESS_TOKEN_SECRET = 'test-access-secret-that-is-at-least-32-characters-long';
   process.env.REFRESH_TOKEN_SECRET = 'test-refresh-secret-that-is-at-least-32-characters-long';
   process.env.ACCESS_TOKEN_EXPIRE = '15m';
@@ -35,7 +35,8 @@ after(() => {
 
 afterEach(() => {
   process.env.NODE_ENV = 'test';
-  process.env.FRONTEND_ORIGIN = 'https://shop.example';
+  process.env.FRONTEND_ORIGIN = 'http://localhost:5173';
+  delete process.env.RENDER_EXTERNAL_URL;
 });
 
 const validId = '64b000000000000000000001';
@@ -92,6 +93,45 @@ test('regular user login sets access and refresh cookies and preserves the respo
   assert.equal(res.body.user.id, validId);
   assert.deepEqual(res.cookies.map(({ name }) => name), ['accessToken', 'refreshToken']);
   assert.equal(jwt.verify(res.cookies[0].value, process.env.ACCESS_TOKEN_SECRET).accountType, 'USER');
+});
+
+test('ADMIN role in the Users collection receives an ADMIN role claim and remains admin-authorized', async (t) => {
+  const admin = await makeUser({ role: 'ADMIN' });
+  stubLoginRecords(t, { user: admin });
+  stubMethod(t, Register, 'updateOne', async () => ({ acknowledged: true }));
+  const res = makeResponse();
+  await userLoginController({ body: { email: admin.email, password } }, res);
+
+  const claims = jwt.verify(res.cookies[0].value, process.env.ACCESS_TOKEN_SECRET);
+  assert.equal(claims.role, 'ADMIN');
+  assert.equal(claims.accountType, 'USER', 'accountType identifies the Users model; role carries authorization');
+  assert.notEqual(res.cookies[0].value, res.cookies[1].value, 'access and refresh tokens use independent secrets');
+
+  stubMethod(t, Register, 'findById', async () => admin);
+  const authRes = makeResponse();
+  let identity;
+  // verifyToken sets the trusted database-backed identity on the request.
+  const req = { headers: {}, cookies: { accessToken: res.cookies[0].value } };
+  await verifyToken(req, authRes, () => { identity = req.user; });
+  assert.equal(identity.role, 'ADMIN');
+  let authorized = false;
+  isAdmin({ user: identity }, makeResponse(), () => { authorized = true; });
+  assert.equal(authorized, true);
+
+  const dealerRoleResponse = makeResponse();
+  let dealerAuthorized = false;
+  isAdmin({ user: { role: 'ADMIN', accountType: 'DEALER' } }, dealerRoleResponse, () => { dealerAuthorized = true; });
+  assert.equal(dealerRoleResponse.statusCode, 403);
+  assert.equal(dealerAuthorized, false);
+
+  const { iat, exp, ...identityClaims } = claims;
+  const expiredAccess = jwt.sign(identityClaims, process.env.ACCESS_TOKEN_SECRET, { expiresIn: -1 });
+  const refreshRes = makeResponse();
+  const refreshReq = { headers: {}, cookies: { accessToken: expiredAccess, refreshToken: res.cookies[1].value } };
+  let refreshed = false;
+  await verifyToken(refreshReq, refreshRes, () => { refreshed = true; });
+  assert.equal(refreshed, true);
+  assert.equal(jwt.verify(refreshRes.cookies[0].value, process.env.ACCESS_TOKEN_SECRET).role, 'ADMIN');
 });
 
 test('cookies issued by login authenticate a protected request', async (t) => {
@@ -333,6 +373,7 @@ test('token-version changes revoke old access tokens and admin checks reject non
 });
 
 test('CSRF generation, valid double-submit, and foreign-origin rejection work', () => {
+  process.env.FRONTEND_ORIGIN = 'https://shop.example';
   const res = makeResponse();
   const token = issueCsrfToken({ cookies: {} }, res);
   assert.equal(res.cookies[0].name, 'csrfToken');
@@ -358,6 +399,7 @@ test('CSRF generation, valid double-submit, and foreign-origin rejection work', 
 
 test('trusted-origin policy restricts production to configured origins', () => {
   process.env.NODE_ENV = 'production';
+  process.env.FRONTEND_ORIGIN = 'https://shop.example';
   const productionOrigins = getTrustedOrigins();
   assert.deepEqual(productionOrigins, ['https://shop.example']);
   assert.equal(isTrustedOrigin('https://shop.example', productionOrigins), true);
@@ -368,7 +410,8 @@ test('trusted-origin policy restricts production to configured origins', () => {
   }, /HTTPS/);
   process.env.FRONTEND_ORIGIN = 'https://shop.example';
   process.env.NODE_ENV = 'development';
-  assert.deepEqual(getTrustedOrigins(), ['https://shop.example', 'http://localhost:5173']);
+  process.env.FRONTEND_ORIGIN = 'http://localhost:5173';
+  assert.deepEqual(getTrustedOrigins(), ['http://localhost:5173']);
 });
 
 test('payment failure retry links use the configured frontend origin', () => {
@@ -385,6 +428,21 @@ test('access cookie security attributes and expiry match the JWT duration', () =
   assert.equal(res.cookies[0].options.secure, true);
   assert.equal(res.cookies[0].options.sameSite, 'none');
   assert.equal(res.cookies[0].options.maxAge, parseExpiryToMs(process.env.ACCESS_TOKEN_EXPIRE));
+  clearAuthCookies(res);
+  assert.ok(res.clearedCookies.every(({ options }) => options.secure && options.sameSite === 'none' && options.path === '/'));
+});
+
+test('hosted HTTPS storefront gets cross-site auth cookies even when NODE_ENV is unset', () => {
+  delete process.env.NODE_ENV;
+  process.env.FRONTEND_ORIGIN = 'https://asapong-phones-and-electronics.vercel.app';
+  assert.deepEqual(getTrustedOrigins(), ['https://asapong-phones-and-electronics.vercel.app']);
+  assert.equal(isTrustedOrigin('http://localhost:5173'), false);
+  const res = makeResponse();
+  setAuthCookies(res, 'access', 'refresh');
+  assert.deepEqual(
+    Object.fromEntries(['httpOnly', 'secure', 'sameSite', 'path'].map((key) => [key, res.cookies[0].options[key]])),
+    { httpOnly: true, secure: true, sameSite: 'none', path: '/' },
+  );
   clearAuthCookies(res);
   assert.ok(res.clearedCookies.every(({ options }) => options.secure && options.sameSite === 'none' && options.path === '/'));
 });

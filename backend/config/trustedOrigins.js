@@ -1,4 +1,4 @@
-const isProduction = () => process.env.NODE_ENV === 'production';
+import { isProductionDeployment } from './deploymentEnvironment.js';
 
 export const getTrustedOrigins = () => {
   const configuredOrigins = (process.env.FRONTEND_ORIGIN || '')
@@ -16,7 +16,7 @@ export const getTrustedOrigins = () => {
       if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== origin.replace(/\/$/, '')) {
         throw new Error('FRONTEND_ORIGIN values must be origins without paths or credentials.');
       }
-      if (isProduction() && parsed.protocol !== 'https:') {
+      if (isProductionDeployment() && parsed.protocol !== 'https:') {
         throw new Error('Production FRONTEND_ORIGIN values must use HTTPS.');
       }
 
@@ -25,7 +25,7 @@ export const getTrustedOrigins = () => {
 
   if (!configuredOrigins.length) throw new Error('FRONTEND_ORIGIN must contain at least one trusted origin.');
 
-  if (!isProduction()) configuredOrigins.push('http://localhost:5173');
+  if (!isProductionDeployment()) configuredOrigins.push('http://localhost:5173');
   return [...new Set(configuredOrigins)];
 };
 
