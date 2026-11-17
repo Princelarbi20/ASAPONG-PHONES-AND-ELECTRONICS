@@ -10,6 +10,27 @@ const isTemporarilyLocked = (account) =>
 const MAX_FAILED_LOGIN_ATTEMPTS = 7;
 const LOCKOUT_MINUTES = [15, 30, 60];
 
+const redactLoginError = (value, req) => {
+    let message = String(value ?? '');
+    const sensitiveValues = [
+        req?.body?.email,
+        req?.body?.password,
+        req?.headers?.authorization,
+        req?.cookies?.accessToken,
+        req?.cookies?.refreshToken,
+        process.env.ACCESS_TOKEN_SECRET,
+        process.env.REFRESH_TOKEN_SECRET,
+        process.env.CSRF_SECRET,
+    ].filter((candidate) => typeof candidate === 'string' && candidate.length > 0)
+        .sort((left, right) => right.length - left.length);
+
+    for (const secret of sensitiveValues) message = message.split(secret).join('[REDACTED]');
+    return message
+        .replace(/\bBearer\s+[^\s,;]+/gi, 'Bearer [REDACTED]')
+        .replace(/\beyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED_JWT]')
+        .replace(/(mongodb(?:\+srv)?:\/\/)[^\s/@]+:[^\s/@]+@/gi, '$1[REDACTED]@');
+};
+
 const recordFailedLogin = async (model, accountId) => {
     const now = new Date();
     const currentAttempts = { $ifNull: ['$failedLoginAttempts', 0] };
@@ -118,6 +139,7 @@ const lockedLoginResponse = async (req, res, account, accountType) => {
 };
 
 export const userLoginController = async (req, res) => {
+    let loginStage = 'input_validation';
     try {
         const { email, password } = req.body;
 
@@ -134,6 +156,7 @@ export const userLoginController = async (req, res) => {
         // ==========================================
         // 1. REGULAR USER PATHWAY
         // ==========================================
+        loginStage = 'regular_user_lookup';
         const regularUser = await Register.findOne({ email: searchEmail }).select('+password');
 
         if (regularUser) {
@@ -149,9 +172,11 @@ export const userLoginController = async (req, res) => {
             }
 
             // Verify Password
+            loginStage = 'regular_user_password_verification';
             const isMatch = await verifyPassword(password, regularUser.password);
 
             if (!isMatch) {
+                loginStage = 'regular_user_failed_attempt_update';
                 const updatedUser = await recordFailedLogin(Register, regularUser._id);
                 if (!updatedUser) return await lockedLoginResponse(req, res, regularUser, 'USER');
                 return await failedLoginResponse(res, updatedUser, 'USER', req);
@@ -167,13 +192,16 @@ export const userLoginController = async (req, res) => {
                 });
             }
 
+            loginStage = 'regular_user_password_upgrade';
             const upgradedHash = isLegacyPasswordHash(regularUser.password) ? await hashPassword(password) : null;
+            loginStage = 'regular_user_login_state_reset';
             if (!await resetLoginState(Register, regularUser, upgradedHash)) return await lockedLoginResponse(req, res, regularUser, 'USER');
 
             // Generate Tokens
             // accountType identifies the backing account model. Admins created
             // in the Users collection therefore correctly have USER here;
             // their ADMIN privilege is carried independently by role.
+            loginStage = 'regular_user_token_and_cookie_issue';
             issueAuthTokens(res, regularUser, "USER");
 
             return res.status(200).json({
@@ -196,14 +224,17 @@ export const userLoginController = async (req, res) => {
         // ==========================================
         // 2. DEALER SHOP USER PATHWAY
         // ==========================================
+        loginStage = 'dealer_user_lookup';
         const shopUser = await ShopRequest.findOne({ email: searchEmail }).select('+password');
 
         if (shopUser) {
             if (isTemporarilyLocked(shopUser)) return await lockedLoginResponse(req, res, shopUser, 'DEALER');
 
+            loginStage = 'dealer_password_verification';
             const isMatch = await verifyPassword(password, shopUser.password);
 
             if (!isMatch) {
+                loginStage = 'dealer_failed_attempt_update';
                 const updatedShop = await recordFailedLogin(ShopRequest, shopUser._id);
                 if (!updatedShop) return await lockedLoginResponse(req, res, shopUser, 'DEALER');
                 return await failedLoginResponse(res, updatedShop, 'DEALER', req);
@@ -223,9 +254,12 @@ export const userLoginController = async (req, res) => {
                 });
             }
 
+            loginStage = 'dealer_password_upgrade';
             const upgradedHash = isLegacyPasswordHash(shopUser.password) ? await hashPassword(password) : null;
+            loginStage = 'dealer_login_state_reset';
             if (!await resetLoginState(ShopRequest, shopUser, upgradedHash)) return await lockedLoginResponse(req, res, shopUser, 'DEALER');
 
+            loginStage = 'dealer_token_and_cookie_issue';
             issueAuthTokens(res, shopUser, "DEALER");
 
             return res.status(200).json({
@@ -249,6 +283,7 @@ export const userLoginController = async (req, res) => {
         // ==========================================
         // 3. NO ACCOUNT FOUND
         // ==========================================
+        loginStage = 'unknown_account_audit_write';
         await writeLoginAudit(req, { accountType: 'UNKNOWN', event: 'LOGIN_FAILED' });
         return res.status(401).json({
             success: false,
@@ -256,7 +291,14 @@ export const userLoginController = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[auth-login] failed', JSON.stringify({ requestId: req.id, errorCode: error?.code || error?.name || 'login_failed' }));
+        console.error('[auth-login] failed', JSON.stringify({
+            requestId: req.id || null,
+            stage: loginStage,
+            errorName: redactLoginError(error?.name || 'Error', req),
+            errorCode: redactLoginError(error?.code || null, req),
+            errorMessage: redactLoginError(error?.message || 'Login failed unexpectedly.', req),
+            stack: redactLoginError(error?.stack || '', req),
+        }));
         return res.status(500).json({
             success: false,
             message: "Internal server error."

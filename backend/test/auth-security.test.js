@@ -218,6 +218,43 @@ test('incorrect passwords and unknown emails return the same generic response', 
   assert.deepEqual(badPassword.body, unknown.body);
 });
 
+test('unexpected login failures log a correlated stage with sensitive values redacted', async (t) => {
+  const email = 'private.person@example.com';
+  const submittedPassword = 'DoNotLogThisPassword123!';
+  const authorization = 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwcml2YXRlIn0.signature123';
+  const failure = new Error(`database rejected ${email} ${submittedPassword} ${authorization}`);
+  failure.name = 'MongoServerError';
+  failure.code = 'EDBFAIL';
+  stubMethod(t, Register, 'findOne', () => ({ select: async () => { throw failure; } }));
+
+  const logs = [];
+  const originalError = console.error;
+  console.error = (...args) => logs.push(args);
+  t.after(() => { console.error = originalError; });
+
+  const res = makeResponse();
+  await userLoginController({
+    id: 'login-request-correlation-test',
+    body: { email, password: submittedPassword },
+    headers: { authorization },
+    cookies: {},
+  }, res);
+
+  assert.equal(res.statusCode, 500);
+  assert.deepEqual(res.body, { success: false, message: 'Internal server error.' });
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0][0], '[auth-login] failed');
+  const details = JSON.parse(logs[0][1]);
+  assert.equal(details.requestId, 'login-request-correlation-test');
+  assert.equal(details.stage, 'regular_user_lookup');
+  assert.equal(details.errorName, 'MongoServerError');
+  assert.match(details.errorMessage, /database rejected/);
+  assert.match(details.stack, /auth-security\.test\.js/);
+  for (const secret of [email, submittedPassword, authorization, 'eyJhbGciOiJIUzI1NiJ9']) {
+    assert.equal(JSON.stringify(details).includes(secret), false, `login log must redact ${secret}`);
+  }
+});
+
 test('unverified and suspended users cannot log in', async (t) => {
   const unverified = await makeUser({ isVerified: false });
   stubLoginRecords(t, { user: unverified });

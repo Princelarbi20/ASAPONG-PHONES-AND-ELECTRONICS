@@ -39,7 +39,7 @@ export const enqueueOrderNotification = async ({ orderId, eventKey, type, data =
   const notification = await OrderNotificationOutbox.findOneAndUpdate(
     { eventKey },
     { $setOnInsert: { order: orderId, eventKey, type, encryptedPayload: encrypt(data) } },
-    { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true, ...(session ? { session } : {}) },
+    { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true, runValidators: true, ...(session ? { session } : {}) },
   );
   return notification;
 };
@@ -78,7 +78,7 @@ export const processOrderNotificationOutbox = async ({ send = sendEmail } = {}) 
     job = await OrderNotificationOutbox.findOneAndUpdate(
       { status: 'pending', attempts: { $lt: MAX_ATTEMPTS }, nextAttemptAt: { $lte: new Date() } },
       { $set: { status: 'sending', lockedAt: new Date() }, $inc: { attempts: 1 } },
-      { new: true, sort: { createdAt: 1 } },
+      { returnDocument: 'after', sort: { createdAt: 1 } },
     ).select('+encryptedPayload');
     if (!job) return false;
 
