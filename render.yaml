@@ -5,11 +5,12 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .
+    healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: "5000"
+        value: "10000"
 
   - type: web
     name: asa-phones-frontend

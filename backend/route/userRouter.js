@@ -36,6 +36,15 @@ export const productListQueryFields = {
 const logProductListPerformance = (req, res, next) => {
   const startedAt = performance.now();
   let logged = false;
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode === 422 && Array.isArray(body?.errors)) {
+      req.productValidationFields = body.errors
+        .map((error) => error?.field)
+        .filter((field) => typeof field === 'string');
+    }
+    return originalJson(body);
+  };
   const logResponseTime = () => {
     if (logged) return;
     logged = true;
@@ -45,6 +54,7 @@ const logProductListPerformance = (req, res, next) => {
       resultCount: req.productListResultCount ?? null,
       paginated: req.productListPaginated ?? null,
       statusCode: res.statusCode,
+      ...(req.productValidationFields ? { validationFields: req.productValidationFields } : {}),
     }));
   };
   res.once('finish', logResponseTime);

@@ -9,9 +9,9 @@ services:
       - ./backend/.env
     environment:
       NODE_ENV: production
-      PORT: "5000"
+      PORT: "10000"
     expose:
-      - "5000"
+      - "10000"
 
   frontend:
     build:
@@ -22,7 +22,7 @@ services:
     restart: unless-stopped
     environment:
       PORT: "10000"
-      API_PROXY_TARGET: http://backend:5000
+      API_PROXY_TARGET: http://backend:10000
     ports:
       - "8080:10000"
     depends_on:

@@ -30,8 +30,11 @@ import { PaystackRefund } from './modules/paystackRefundSchema.js';
 import { OrderNotificationOutbox } from './modules/orderNotificationOutbox.js';
 import { getTrustedOrigins } from './config/trustedOrigins.js';
 import { AuthAuditLog } from './modules/authAuditLog.js';
+import { healthCheckHandler } from './utils/healthCheck.js';
+import { once } from 'node:events';
 const app = express();
 app.use(jsonCompression);
+app.get('/healthz', healthCheckHandler);
 // Render terminates TLS through one trusted reverse proxy; req.ip is used by the login limiter and audit trail.
 app.set('trust proxy', 1);
 assertTestEnvironment();
@@ -149,29 +152,41 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
 app.use(errorHandler);
-const PORT = process.env.PORT || 5000;
+const fallbackPort = process.env.NODE_ENV === 'production' ? 10000 : 5000;
+const PORT = Number(process.env.PORT || fallbackPort);
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
+  throw new Error('PORT must be an integer between 1 and 65535.');
+}
 
 const startServer = async () => {
   const startedAt = performance.now();
+  let startupPhase = 'database';
   try {
     await connectDB();
+    startupPhase = 'indexes';
     // The unique paymentAttempt index is the final database guard against
     // multiple refund records being created by simultaneous workers.
     await PaystackRefund.createIndexes();
     await OrderNotificationOutbox.createIndexes();
     await AuthAuditLog.createIndexes();
+    startupPhase = 'workers';
     startEmailOutboxWorker();
     startOrderNotificationWorker();
     startOrderExpiryWorker();
     startPaystackRefundWorker();
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server is running on port ${PORT}`);
-      console.info('[performance] app_ready', JSON.stringify({
-        startupMs: Number((performance.now() - startedAt).toFixed(1)),
-      }));
-    });
+    startupPhase = 'http_bind';
+    const server = app.listen(PORT, '0.0.0.0');
+    await once(server, 'listening');
+    const address = server.address();
+    console.log(`Server is running on port ${address.port}`);
+    console.info('[performance] app_ready', JSON.stringify({
+      port: address.port,
+      host: '0.0.0.0',
+      startupMs: Number((performance.now() - startedAt).toFixed(1)),
+    }));
   } catch (error) {
-    console.error('[startup] database_connection_failed', JSON.stringify({
+    console.error('[startup] startup_failed', JSON.stringify({
+      phase: startupPhase,
       name: error.name,
       code: error.code || null,
       startupMs: Number((performance.now() - startedAt).toFixed(1)),
