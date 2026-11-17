@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useOutletContext, useNavigate } from 'react-router-dom';
-import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios';
+import axiosInstance, { optimizeProductImageUrl, resolveApiAssetUrl } from '@/lib/axios';
+import { getProducts } from '@/lib/productApi';
 import { AlertCircle, ArrowUpDown, Eye, ShoppingCart, Heart, SlidersHorizontal, Tag, X } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { useSelector, useDispatch } from 'react-redux';
@@ -18,8 +19,8 @@ function ProductImageSlider({ images, isSoldOut, altText, productId }) {
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
     if (typeof imgStr !== 'string') return 'https://placehold.co/600x400?text=No+Image';
-    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return imgStr;
-    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
+    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return optimizeProductImageUrl(imgStr);
+    return optimizeProductImageUrl(resolveApiAssetUrl(imgStr.replace(/\\/g, '/')));
   };
 
   useEffect(() => {
@@ -57,6 +58,8 @@ function ProductImageSlider({ images, isSoldOut, altText, productId }) {
                 className={`max-w-full max-h-full object-contain transition-opacity duration-300 ${isSoldOut ? 'opacity-60' : 'group-hover/image:scale-105'}`}
                 src={getSingleImageUrl(img)}
                 alt={`${altText} view ${idx + 1}`}
+                loading="lazy"
+                decoding="async"
               />
             </div>
           ))
@@ -66,6 +69,8 @@ function ProductImageSlider({ images, isSoldOut, altText, productId }) {
               className={`max-w-full max-h-full object-contain ${isSoldOut ? 'opacity-60' : ''}`}
               src={getSingleImageUrl(null)}
               alt={altText}
+              loading="lazy"
+              decoding="async"
             />
           </div>
         )}
@@ -167,7 +172,7 @@ export default function CategoryGrid({
       setLoading(true);
       setErrorMsg('');
 
-      const response = await axiosInstance.get('/get-All-product');
+      const response = await getProducts({ summary: true });
 
       if (response.data && Array.isArray(response.data.products)) {
         setProducts(response.data.products);

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
-import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios';
+import { optimizeProductImageUrl, resolveApiAssetUrl } from '@/lib/axios';
+import { getProducts } from '@/lib/productApi';
 import { formatPrice } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { Link } from "react-router-dom";
@@ -7,7 +8,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const getSingleImageUrl = (imgStr) => {
   if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
-  return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
+  return optimizeProductImageUrl(resolveApiAssetUrl(imgStr.replace(/\\/g, '/')));
 };
 
 // Inner Staggered Image Slider Component for Card Images
@@ -17,15 +18,17 @@ const ProductCardImage = ({ images, name, isItemSoldOut, index }) => {
   useEffect(() => {
     if (!images || images.length <= 1 || isItemSoldOut) return;
 
+    let intervalId;
     const staggerOffsetTimeout = setTimeout(() => {
-      const interval = setInterval(() => {
+      intervalId = setInterval(() => {
         setCurrentIndex((prevIndex) => (prevIndex + 1) % images.length);
       }, 3000);
-
-      return () => clearInterval(interval);
     }, (index % 4) * 450 + Math.random() * 200);
 
-    return () => clearTimeout(staggerOffsetTimeout);
+    return () => {
+      clearTimeout(staggerOffsetTimeout);
+      clearInterval(intervalId);
+    };
   }, [images, isItemSoldOut, index]);
 
   return (
@@ -40,12 +43,12 @@ const ProductCardImage = ({ images, name, isItemSoldOut, index }) => {
         {images && images.length > 0 ? (
           images.map((img, i) => (
             <div key={i} className="h-full flex items-center justify-center p-1.5" style={{ width: `${100 / images.length}%` }}>
-              <img src={getSingleImageUrl(img)} alt={`${name} view ${i + 1}`} className={`max-w-full max-h-full object-contain pointer-events-none ${isItemSoldOut ? 'opacity-60' : ''}`} />
+              <img src={getSingleImageUrl(img)} alt={`${name} view ${i + 1}`} loading="lazy" decoding="async" className={`max-w-full max-h-full object-contain pointer-events-none ${isItemSoldOut ? 'opacity-60' : ''}`} />
             </div>
           ))
         ) : (
           <div className="w-full h-full flex items-center justify-center p-1.5">
-            <img src={getSingleImageUrl(null)} alt={name} className={`max-w-full max-h-full object-contain ${isItemSoldOut ? 'opacity-60' : ''}`} />
+            <img src={getSingleImageUrl(null)} alt={name} loading="lazy" decoding="async" className={`max-w-full max-h-full object-contain ${isItemSoldOut ? 'opacity-60' : ''}`} />
           </div>
         )}
       </div>
@@ -237,7 +240,7 @@ const ProductList = ({ category, linkTo, title, subtitle }) => {
   const fetchProducts = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await axiosInstance.get('/get-All-product');
+      const { data } = await getProducts({ summary: true });
       const allProducts = Array.isArray(data) ? data : (data.products || []);
       const filteredProducts = allProducts.filter((product) => product.category?.toLowerCase() === category?.toLowerCase());
       setProducts(filteredProducts.slice(0, 10));

@@ -39,7 +39,8 @@ adminRouter.get("/get-all-orders", verifyToken, refreshToken, isAdmin, validateP
 adminRouter.put("/update-orders/:id",verifyToken,refreshToken,isAdmin,validateRequest({ params: { "id*": v.objectId }, body: { "status*": v.orderStatus }, query: {} }),updateOrderStatusController);
 adminRouter.post('/orders/:id/refund', verifyToken, refreshToken, isAdmin, validateRequest({ params: { 'id*': v.objectId }, body: {}, query: {} }), requestOrderRefundController);
 const validateDashboardRange = validateRequest({ query: { days: (value) => ['7', '30', '90'].includes(value) }, body: {} });
-adminRouter.get("/dashboard-charts",verifyToken,refreshToken,isAdmin,validateDashboardRange,getDashboardStatsController);
+const cacheAdminDashboard = cacheJsonResponse({ namespace: CACHE_NAMESPACES.adminDashboard, privateScope: 'admin', ttlSeconds: 15 });
+adminRouter.get("/dashboard-charts",verifyToken,refreshToken,isAdmin,validateDashboardRange,cacheAdminDashboard,getDashboardStatsController);
 // Admin Product Management
 const productBody = { "name*": v.shortText, "description*": v.longText, "price*": v.price, "category*": v.shortText, "stock*": v.stock, brand: v.shortText, rating: v.rating, shopId: (value) => typeof value === 'string' && value.length <= 100, specifications: v.specifications, newArrival: v.boolean };
 const updateProductBody = { ...productBody, existingImages: (value) => typeof value === 'string' && value.length <= 10000 && (() => { try { const parsed = JSON.parse(value); return Array.isArray(parsed) && parsed.length <= 16 && parsed.every((item) => typeof item === 'string' && item.length <= 2048); } catch { return false; } })() };
@@ -51,7 +52,7 @@ adminRouter.get("/get-order/:id", verifyToken, refreshToken, isAdmin, validateRe
 // Admin User Status & Stats
 adminRouter.put("/suspend-user/:id",verifyToken,refreshToken,isAdmin,validateRequest({ params: { "id*": v.objectId }, query: {}, body: {} }),suspendUserController);
 adminRouter.put("/unsuspend-user/:id",verifyToken,refreshToken,isAdmin,validateRequest({ params: { "id*": v.objectId }, query: {}, body: {} }),unsuspendUserController);
-adminRouter.get("/dashboard-stats",verifyToken,refreshToken,isAdmin,validateDashboardRange,getDashboardStatsController);
+adminRouter.get("/dashboard-stats",verifyToken,refreshToken,isAdmin,validateDashboardRange,cacheAdminDashboard,getDashboardStatsController);
 adminRouter.get("/transactions", verifyToken, refreshToken, isAdmin, validatePaginationQuery, validateRequest({ query: { ...paginationQueryFields, search: (value) => typeof value === 'string' && value.length <= 100, status: (value) => value === '' || ['PENDING', 'SUCCESSFUL', 'FAILED', 'REFUNDED', 'ABANDONED'].includes(value), method: (value) => value === '' || (typeof value === 'string' && value.length <= 50) }, body: {} }), getPaymentTransactionsController);
 
 // Admin Shop & Management

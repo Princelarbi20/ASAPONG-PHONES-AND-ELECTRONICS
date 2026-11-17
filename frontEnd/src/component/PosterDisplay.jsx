@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/component/Button'
 import { useNavigate } from 'react-router-dom'
-import { resolveApiAssetUrl } from '@/lib/axios'
+import { optimizeProductImageUrl, resolveApiAssetUrl } from '@/lib/axios'
 import { getProducts } from '@/lib/productApi'
 
 /* ---------- category helpers ---------- */
@@ -140,7 +140,7 @@ const PosterDisplay = ({ category = '' }) => {
         setLoading(true);
         setCurrentIndex(0);
 
-        const response = await getProducts();
+        const response = await getProducts({ summary: true });
 
         let rawProductsList = [];
         if (response.data && Array.isArray(response.data.products)) {
@@ -180,8 +180,8 @@ const PosterDisplay = ({ category = '' }) => {
 
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
-    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return imgStr;
-    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
+    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return optimizeProductImageUrl(imgStr, 1200);
+    return optimizeProductImageUrl(resolveApiAssetUrl(imgStr.replace(/\\/g, '/')), 1200);
   };
 
   const navigateToProductDetails = (device) => {
@@ -297,6 +297,8 @@ const PosterDisplay = ({ category = '' }) => {
                     <img
                       src={getSingleImageUrl(device.images?.[0])}
                       alt={device.name || "Product Banner Image"}
+                      loading={idx === 0 ? 'eager' : 'lazy'}
+                      decoding="async"
                       className="max-w-full max-h-full w-auto h-auto object-contain rounded-xl drop-shadow-[0_25px_35px_rgba(0,0,0,0.45)] transition-transform duration-700 hover:scale-105"
                     />
 

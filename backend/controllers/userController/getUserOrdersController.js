@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { Orders } from "../../modules/orderSchema.js";
+import { getPagination, paginationResult } from "../../utils/pagination.js";
 
 const PAYMENT_STATUSES = ["PENDING", "PAID", "FAILED", "ABANDONED", "REVERSED"];
 
@@ -35,12 +36,16 @@ export const getUserOrdersController = async (req, res, next) => {
       filter.paymentStatus = requestedStatus;
     }
 
-    const userOrders = await Orders.find(filter)
-      .populate({
-        path: "items.productId",
-        select: "name price images description brand category stock specifications",
-      })
-      .sort({ createdAt: -1 });
+    const pageOptions = getPagination(req.query, { defaultLimit: 10, maxLimit: 50 });
+    const [userOrders, total] = await Promise.all([
+      Orders.find(filter)
+        .select('_id orderNumber status paymentStatus paymentMethod paymentDetails.provider paymentDetails.channel paymentDetails.serviceProvider totalPrice createdAt expiresAt shippingAddress items')
+        .populate({ path: "items.productId", select: "images" })
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(pageOptions.skip)
+        .limit(pageOptions.limit),
+      Orders.countDocuments(filter),
+    ]);
 
     const orders = userOrders.map((order) => {
       const obj = order.toObject();
@@ -62,9 +67,10 @@ export const getUserOrdersController = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
-      count: orders.length,
+      count: total,
       message: "Orders retrieved successfully.",
       orders,
+      pagination: paginationResult(pageOptions.page, pageOptions.limit, total),
     });
   } catch (err) {
     return next(err);

@@ -52,7 +52,7 @@ export const updateOrderStatusController = async (req, res, next) => {
           status,
           ...(status === "CANCELLED" ? { inventoryReleasedAt: new Date() } : {}),
         } },
-        { returnDocument: 'after', runValidators: true, session },
+        { new: true, runValidators: true, session },
       );
       if (!updatedOrder) fail(409, "The order changed while this update was being applied. Refresh and try again.");
 

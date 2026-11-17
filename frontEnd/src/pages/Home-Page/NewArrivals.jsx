@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import Title from '@/component/Title'
-import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios'
+import { optimizeProductImageUrl, resolveApiAssetUrl } from '@/lib/axios'
+import { getProducts } from '@/lib/productApi'
 import { useNavigate } from 'react-router-dom'
 import { formatPrice } from '@/lib/utils'
 
@@ -9,7 +10,7 @@ const SLIDE_DURATION_MS = 700 // keep in sync with duration-700 below
 
 const getSingleImageUrl = (imgStr) => {
   if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
-  return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
+  return optimizeProductImageUrl(resolveApiAssetUrl(imgStr.replace(/\\/g, '/')));
 };
 
 // Card image area. With more than one image it slides to the next one every few seconds.
@@ -124,7 +125,7 @@ const NewArrivals = () => {
   const fetchProduct = async () => {
     try {
       setLoading(true)
-      const response = await axiosInstance.get('/get-All-product');
+      const response = await getProducts({ summary: true });
 
       let allProduct = [];
       if (response.data && Array.isArray(response.data.products)) {

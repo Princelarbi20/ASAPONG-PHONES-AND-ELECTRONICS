@@ -7,10 +7,13 @@ export const CACHE_NAMESPACES = Object.freeze({
   adminOrders: 'admin-orders',
   userOrders: 'user-orders',
   adminUsers: 'admin-users',
+  adminDashboard: 'admin-dashboard',
 });
 
 const REDIS_OPERATION_TIMEOUT_MS = 200;
 const REDIS_INVALIDATION_TIMEOUT_MS = 100;
+const CACHE_COALESCE_WAIT_MS = 1_000;
+const CACHE_FILL_MAX_MS = 20_000;
 
 const withTimeout = (operation, timeoutMs) => new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(new Error('Redis operation timed out.')), timeoutMs);
@@ -33,6 +36,7 @@ export const createResponseCacheService = ({
   isReady = isRedisCacheReady,
   onInvalidationFailure = recoverRedisCache,
 } = {}) => {
+  const pendingCacheFills = new Map();
   const getCacheVersions = async (namespace) => {
     const [epoch, version] = await withTimeout(
       () => client.mget('cache:epoch', `cache:version:${namespace}`),
@@ -81,46 +85,101 @@ export const createResponseCacheService = ({
       }
     }
 
+    const pendingFill = pendingCacheFills.get(key);
+    if (pendingFill) {
+      let waitTimer;
+      const sharedResponse = await Promise.race([
+        pendingFill.promise,
+        new Promise((resolve) => {
+          waitTimer = setTimeout(() => resolve(null), CACHE_COALESCE_WAIT_MS);
+          waitTimer.unref?.();
+        }),
+      ]);
+      clearTimeout(waitTimer);
+      if (sharedResponse) {
+        res.setHeader('X-Cache', 'COALESCED');
+        return res.status(sharedResponse.status).json(sharedResponse.body);
+      }
+      return next();
+    }
+
+    let resolveFill;
+    const fillPromise = new Promise((resolve) => { resolveFill = resolve; });
+    let fillTimeout;
+    const fill = { promise: fillPromise };
+    pendingCacheFills.set(key, fill);
+    const finishFill = (sharedResponse = null) => {
+      clearTimeout(fillTimeout);
+      if (pendingCacheFills.get(key) === fill) pendingCacheFills.delete(key);
+      resolveFill(sharedResponse);
+    };
+    fillTimeout = setTimeout(() => finishFill(), CACHE_FILL_MAX_MS);
+    fillTimeout.unref?.();
+    // If a handler errors or closes without returning JSON, release waiters so
+    // they can perform their own request instead of hanging indefinitely.
+    res.once?.('finish', () => finishFill());
+    res.once?.('close', () => finishFill());
+
     res.setHeader('X-Cache', 'MISS');
     const originalJson = res.json.bind(res);
     res.json = (body) => {
+      let encoded;
+      let sharedResponse = null;
       if (res.statusCode >= 200 && res.statusCode < 300) {
         try {
-          const encoded = JSON.stringify(body);
+          encoded = JSON.stringify(body);
           if (encoded !== undefined) {
             void withTimeout(() => client.set(key, encoded, 'EX', ttlSeconds), REDIS_OPERATION_TIMEOUT_MS).catch((error) => {
               console.warn('[cache] write skipped', JSON.stringify({ namespace, errorName: error?.name }));
             });
+            sharedResponse = { status: res.statusCode, body };
           }
         } catch (error) {
           console.warn('[cache] response was not cacheable', JSON.stringify({ namespace, errorName: error?.name }));
         }
       }
+      finishFill(sharedResponse);
       return originalJson(body);
     };
     return next();
   };
 
-  const invalidateCacheNamespace = async (namespace) => {
+  const invalidateNamespaceVersion = async (namespace) => {
     if (!isReady()) return false;
     try {
       await withTimeout(() => client.incr(`cache:version:${namespace}`), REDIS_INVALIDATION_TIMEOUT_MS);
       return true;
     } catch (error) {
       console.warn('[cache] invalidation recovery requested', JSON.stringify({ namespace, errorName: error?.name }));
-      // A MongoDB commit must not be rolled back or reported as failed because Redis
-      // is unavailable. Disabling this client and advancing the shared epoch on its
-      // next connection makes all potentially stale entries unreachable.
-      try { onInvalidationFailure(); } catch (recoveryError) {
-        console.error('[cache] recovery callback failed', recoveryError?.code || recoveryError?.name);
-      }
       return false;
     }
   };
 
-  const invalidateCacheNamespaces = async (...namespaces) => {
-    await Promise.all([...new Set(namespaces)].map(invalidateCacheNamespace));
+  const invalidateNamespaces = async (requestedNamespaces) => {
+    const namespaces = new Set(requestedNamespaces);
+    if ([
+      CACHE_NAMESPACES.products,
+      CACHE_NAMESPACES.adminOrders,
+      CACHE_NAMESPACES.userOrders,
+      CACHE_NAMESPACES.adminUsers,
+    ].some((namespace) => namespaces.has(namespace))) {
+      namespaces.add(CACHE_NAMESPACES.adminDashboard);
+    }
+    const results = await Promise.all([...namespaces].map(invalidateNamespaceVersion));
+    const succeeded = results.every(Boolean);
+    if (!succeeded && isReady()) {
+      // A MongoDB commit must not be rolled back or reported as failed because Redis
+      // is unavailable. Disable this client once; its next connection advances the
+      // shared epoch, making all potentially stale entries unreachable.
+      try { onInvalidationFailure(); } catch (recoveryError) {
+        console.error('[cache] recovery callback failed', recoveryError?.code || recoveryError?.name);
+      }
+    }
+    return succeeded;
   };
+
+  const invalidateCacheNamespace = (namespace) => invalidateNamespaces([namespace]);
+  const invalidateCacheNamespaces = (...namespaces) => invalidateNamespaces(namespaces);
 
   return { cacheJsonResponse, invalidateCacheNamespace, invalidateCacheNamespaces };
 };

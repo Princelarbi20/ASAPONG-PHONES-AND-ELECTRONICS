@@ -23,9 +23,14 @@ import { validateImages } from "../middleware/validateUploadedFiles.js";
 import { validatePaginationQuery, validateRequest, validators as v } from "../middleware/requestValidation.js";
 import { cacheJsonResponse, CACHE_NAMESPACES } from "../utils/responseCache.js";
 
-export const productListQueryFields = {
+export const paginationQueryFields = {
   page: (value) => typeof value === 'string' && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 10_000_000,
   limit: (value) => typeof value === 'string' && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 100,
+};
+
+export const productListQueryFields = {
+  ...paginationQueryFields,
+  summary: (value) => value === 'true' || value === 'false',
 };
 
 const logProductListPerformance = (req, res, next) => {
@@ -52,7 +57,7 @@ userRouter.post("/add-to-cart", verifyToken, refreshToken, validateRequest({ bod
 userRouter.put("/update/:productId",verifyToken,refreshToken,validateRequest({ params: { "productId*": v.objectId }, body: { "quantity*": v.cartQuantity }, query: {} }),updateCartQuantityController);
 userRouter.delete("/remove/:productId",verifyToken,refreshToken,validateRequest({ params: { "productId*": v.objectId }, query: {}, body: {} }),removeCartItemController);
 userRouter.post("/create-order", verifyToken, refreshToken, validateRequest({ body: { "shippingAddress*": v.address, paymentMethod: v.paymentMethod }, query: {} }), createOrderController);
-userRouter.get("/my-orders", verifyToken, refreshToken, validateRequest({ query: { paymentStatus: (value) => typeof value === 'string' && ['PENDING', 'PAID', 'FAILED', 'ABANDONED', 'REVERSED'].includes(value.toUpperCase()) }, body: {} }), cacheJsonResponse({ namespace: CACHE_NAMESPACES.userOrders, privateScope: 'user' }), getUserOrdersController);
+userRouter.get("/my-orders", verifyToken, refreshToken, validatePaginationQuery, validateRequest({ query: { ...paginationQueryFields, paymentStatus: (value) => typeof value === 'string' && ['PENDING', 'PAID', 'FAILED', 'ABANDONED', 'REVERSED'].includes(value.toUpperCase()) }, body: {} }), cacheJsonResponse({ namespace: CACHE_NAMESPACES.userOrders, privateScope: 'user' }), getUserOrdersController);
 userRouter.get("/get-All-product", logProductListPerformance, validatePaginationQuery, validateRequest({ query: { ...productListQueryFields, category: (value) => typeof value === 'string' && value.length <= 100, search: (value) => typeof value === 'string' && value.length <= 100, brandSort: (value) => ['none', 'asc', 'desc'].includes(value) }, body: {} }), cacheJsonResponse({ namespace: CACHE_NAMESPACES.products }), getAllProducts)
 userRouter.post("/create-shop",apiLimiter,certificate.array("files", 3),validatePdfs,validateRequest({ body: { "shopName*": v.shortText, "description*": v.longText, "category*": v.shortText, "email*": v.email, "number*": v.phone, "password*": v.password }, query: {} }),createShopRequest);
 userRouter.post("/dellaer-add-product",verifyToken,refreshToken,isDellaer,upload.array("images", 5),validateImages,validateRequest({ body: { "name*": v.shortText, "description*": v.longText, "price*": v.price, "category*": v.shortText, "stock*": v.stock, "brand*": v.shortText, rating: v.rating }, query: {} }),addProductDealerController);

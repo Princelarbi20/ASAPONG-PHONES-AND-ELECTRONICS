@@ -35,7 +35,7 @@ export const expireOnlineOrder = async (orderId, now = new Date()) => {
           inventoryReleasedAt: null,
         },
         { $set: { status: 'EXPIRED', expiredAt: now, inventoryReleasedAt: now } },
-        { returnDocument: 'after', runValidators: true, session },
+        { new: true, runValidators: true, session },
       );
       if (!expiredOrder) return;
 

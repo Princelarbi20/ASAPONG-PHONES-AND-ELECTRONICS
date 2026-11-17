@@ -126,6 +126,7 @@ export const initializePaymentController = async (req, res) => {
         Authorization: `Bearer ${config.secretKey}`,
         "Content-Type": "application/json",
       },
+      signal: AbortSignal.timeout(10_000),
       body: JSON.stringify({
         email,
         amount: amountInPesewas,
@@ -244,21 +245,24 @@ export const initializePaymentController = async (req, res) => {
     });
   } catch (error) {
     console.error("Paystack Initialize Network/System Error:", error);
+    const timedOut = error?.name === 'TimeoutError' || error?.name === 'AbortError';
 
     if (attempt) {
       await PaymentAttempt.findByIdAndUpdate(attempt._id, {
         $set: {
           status: "FAILED",
-          gatewayResponse: error.message || "Payment initialization failed.",
-          metadata: { stage: "initialization" },
+          gatewayResponse: timedOut ? "Paystack initialization request timed out." : (error.message || "Payment initialization failed."),
+          metadata: { stage: "initialization", ...(timedOut ? { reason: 'PROVIDER_TIMEOUT' } : {}) },
           completedAt: new Date(),
         },
       }).catch((updateError) => console.error("Could not update payment attempt:", updateError));
     }
 
-    return res.status(500).json({
+    return res.status(timedOut ? 504 : 500).json({
       success: false,
-      message: "Internal server error during payment initialization.",
+      message: timedOut
+        ? "The payment service took too long to respond. Check your order status before trying again."
+        : "Internal server error during payment initialization.",
     });
   }
 };

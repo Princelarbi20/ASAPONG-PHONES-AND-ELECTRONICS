@@ -55,6 +55,31 @@ test('cache miss stores the Mongo response with the configured TTL and the next 
   assert.equal(CACHE_TTL_SECONDS, 1200);
 });
 
+test('concurrent identical cache misses share one database response within this process', async () => {
+  const client = new MemoryRedis();
+  const service = createResponseCacheService({ client, isReady: () => true });
+  const middleware = service.cacheJsonResponse({ namespace: CACHE_NAMESPACES.products });
+  let releaseDatabase;
+  let databaseCalls = 0;
+  const first = invoke(middleware, request({ path: '/concurrent-products' }), () => {
+    databaseCalls += 1;
+    return new Promise((resolve) => { releaseDatabase = resolve; });
+  });
+
+  await new Promise(setImmediate);
+  const second = invoke(middleware, request({ path: '/concurrent-products' }), () => {
+    databaseCalls += 1;
+    return { products: ['duplicate query'] };
+  });
+  await new Promise(setImmediate);
+  releaseDatabase({ products: ['single query'] });
+
+  const [owner, coalesced] = await Promise.all([first, second]);
+  assert.equal(databaseCalls, 1);
+  assert.deepEqual(coalesced.body, owner.body);
+  assert.equal(coalesced.headers['x-cache'], 'COALESCED');
+});
+
 test('private cache keys isolate users and roles and are never marked publicly cacheable', async () => {
   const client = new MemoryRedis();
   const service = createResponseCacheService({ client, isReady: () => true });
@@ -99,6 +124,25 @@ test('namespace invalidation prevents old entries and late miss writes from beco
 
   const nextRequest = await invoke(middleware, request({ path: '/racing-products' }), { products: ['fresh'] });
   assert.equal(nextRequest.headers['x-cache'], 'MISS');
+});
+
+test('product, order, and user changes also invalidate the short-lived admin dashboard cache', async () => {
+  const client = new MemoryRedis();
+  const service = createResponseCacheService({ client, isReady: () => true });
+  const middleware = service.cacheJsonResponse({
+    namespace: CACHE_NAMESPACES.adminDashboard,
+    privateScope: 'admin',
+    ttlSeconds: 15,
+  });
+  const adminRequest = request({ path: '/dashboard-stats', user: { id: 'admin-1', role: 'ADMIN', accountType: 'ADMIN' } });
+  const first = await invoke(middleware, adminRequest, { stats: 'before' });
+  await new Promise(setImmediate);
+  assert.equal(first.headers['x-cache'], 'MISS');
+
+  assert.equal(await service.invalidateCacheNamespace(CACHE_NAMESPACES.products), true);
+  const afterProductChange = await invoke(middleware, adminRequest, { stats: 'after' });
+  assert.equal(afterProductChange.headers['x-cache'], 'MISS');
+  assert.deepEqual(afterProductChange.body, { stats: 'after' });
 });
 
 test('Redis unavailable bypasses cache and invalidation failure requests recovery without throwing', async () => {

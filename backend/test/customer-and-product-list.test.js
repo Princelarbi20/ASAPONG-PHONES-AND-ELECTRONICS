@@ -10,6 +10,7 @@ import { getPaymentTransactionsController } from '../controllers/adminController
 import { getAllProducts } from '../controllers/adminControllers/getAllProductsController.js';
 import { createOrderController } from '../controllers/userController/createOrderController.js';
 import { initializePaymentController } from '../controllers/Payment-controllers/initializePaymentController.js';
+import { getUserOrdersController } from '../controllers/userController/getUserOrdersController.js';
 import { Counter } from '../modules/counterSchema.js';
 import { validatePaginationQuery, validateRequest } from '../middleware/requestValidation.js';
 import { productListQueryFields } from '../route/userRouter.js';
@@ -28,6 +29,7 @@ const stub = (t, object, key, implementation) => {
 };
 
 const queryBuilder = (records, onCall = () => {}) => ({
+  select(value) { onCall('select', value); return this; },
   sort(value) { onCall('sort', value); return this; },
   skip(value) { onCall('skip', value); return this; },
   limit(value) { onCall('limit', value); return this; },
@@ -56,6 +58,7 @@ const runProductQueryValidation = async (query) => {
 
 test('product listing accepts unpaginated and paginated query parameters', async () => {
   assert.equal(await runProductQueryValidation({}), null);
+  assert.equal(await runProductQueryValidation({ summary: 'true' }), null);
   assert.equal(await runProductQueryValidation({ page: '2', limit: '12', category: 'Phones', search: 'pixel', brandSort: 'asc' }), null);
   const invalid = await runProductQueryValidation({ page: '0', limit: '101' });
   assert.equal(invalid.statusCode, 422);
@@ -87,6 +90,37 @@ test('product listing controller handles unpaginated and paginated filtered requ
 
   await getAllProducts({ query: { page: '3', limit: '12', category: 'Phones' } }, makeResponse());
   assert.equal(calls.some(([name, value]) => name === 'skip' && value === 24), true);
+
+  await getAllProducts({ query: { summary: 'true' } }, makeResponse());
+  assert.equal(calls.some(([name, value]) => name === 'select' && value.includes('images') && !value.includes('description')), true);
+});
+
+test('customer order history paginates, keeps customer snapshots, and limits populated product fields', async (t) => {
+  const order = {
+    toObject: () => ({
+      _id: 'order-1',
+      paymentStatus: 'PENDING',
+      status: 'PENDING',
+      items: [{ productId: { _id: 'product-1', images: ['image.jpg'] } }],
+    }),
+  };
+  const calls = [];
+  stub(t, Orders, 'find', () => queryBuilder([order], (...call) => calls.push(call)));
+  stub(t, Orders, 'countDocuments', async () => 23);
+  const response = makeResponse();
+
+  await getUserOrdersController({
+    user: { id: '64b000000000000000000003' },
+    query: { page: '2', limit: '10' },
+  }, response, (error) => { throw error; });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.count, 23);
+  assert.deepEqual(response.body.pagination, { page: 2, limit: 10, total: 23, totalPages: 3 });
+  assert.equal(response.body.orders.length, 1);
+  assert.equal(calls.some(([name, value]) => name === 'skip' && value === 10), true);
+  assert.equal(calls.some(([name, value]) => name === 'limit' && value === 10), true);
+  assert.equal(calls.some(([name, value]) => name === 'select' && !value.includes('gatewayResponse')), true);
 });
 
 test('order manifest resolves registered customers, marks explicit guests, and preserves unknown historical references', async (t) => {
@@ -222,7 +256,11 @@ test('payment initialization supports a failed-payment retry and persists its cu
   process.env.FRONTEND_ORIGIN = 'https://shop.example';
 
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => ({ ok: true, text: async () => JSON.stringify({ status: true, data: { reference: 'payment-reference-123' } }) });
+  globalThis.fetch = async (_url, options) => {
+    assert.ok(options.signal instanceof AbortSignal);
+    assert.equal(options.signal.aborted, false);
+    return { ok: true, text: async () => JSON.stringify({ status: true, data: { reference: 'payment-reference-123' } }) };
+  };
   t.after(() => { globalThis.fetch = originalFetch; });
   stub(t, Orders, 'findById', () => ({ populate: async () => order }));
   stub(t, Orders, 'findOneAndUpdate', async (filter) => { paymentOrderFilter = filter; return {}; });

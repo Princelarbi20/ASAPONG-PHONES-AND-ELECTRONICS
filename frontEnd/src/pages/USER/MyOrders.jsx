@@ -16,6 +16,8 @@ export const MyOrders = () => {
     // Component tracking states
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [orderPagination, setOrderPagination] = useState({ page: 1, totalPages: 1 });
     const [errorMsg, setErrorMsg] = useState('');
     const [payingId, setPayingId] = useState(null);
     const [payError, setPayError] = useState('');
@@ -91,24 +93,27 @@ export const MyOrders = () => {
     };
 
     // FETCH ORDER HISTORY
-    const fetchUserOrders = useCallback(async () => {
+    const fetchUserOrders = useCallback(async ({ page = 1, append = false } = {}) => {
         if (!isAuthenticated) return;
         try {
-            setLoading(true);
+            if (append) setLoadingMore(true);
+            else setLoading(true);
             setErrorMsg('');
 
-            const response = await axiosInstance.get('/my-orders');
+            const response = await axiosInstance.get('/my-orders', { params: { page, limit: 10 } });
 
             if (response.data && Array.isArray(response.data.orders)) {
-                setOrders(response.data.orders);
+                setOrders((current) => append ? [...current, ...response.data.orders] : response.data.orders);
+                setOrderPagination(response.data.pagination || { page, totalPages: 1 });
             } else {
-                setOrders([]);
+                if (!append) setOrders([]);
             }
         } catch (err) {
             console.error('Failed to fetch user orders:', err);
             setErrorMsg(err.response?.data?.message || 'Could not retrieve your orders.');
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
     }, [isAuthenticated]);
 
@@ -356,6 +361,19 @@ export const MyOrders = () => {
                     </div>
                 ))}
             </div>
+
+            {orderPagination.page < orderPagination.totalPages && (
+                <div className="flex justify-center">
+                    <button
+                        type="button"
+                        onClick={() => fetchUserOrders({ page: orderPagination.page + 1, append: true })}
+                        disabled={loadingMore}
+                        className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                    >
+                        {loadingMore ? 'Loading…' : 'Load more orders'}
+                    </button>
+                </div>
+            )}
 
         </div>
     );

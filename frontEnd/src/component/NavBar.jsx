@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, Link, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
-import axiosInstance from '@/lib/axios';
+import { getProducts } from '@/lib/productApi';
 import { authAction } from "../redux/store";
 import Logo from "./Logo";
 import { Button } from "./Button";
@@ -135,7 +135,7 @@ const Navbar = ({ globalSearchQuery, setGlobalSearchQuery }) => {
   useEffect(() => {
     const fetchAllProducts = async () => {
       try {
-        const response = await axiosInstance.get('/get-All-product');
+        const response = await getProducts({ summary: true });
         const products = response.data?.products || response.data || [];
         setAllProducts(Array.isArray(products) ? products : []);
       } catch (err) {

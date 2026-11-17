@@ -121,7 +121,7 @@ export const applyPaystackPayment = async (order, payment, reference) => {
       },
       $setOnInsert: { reference: payment.reference || reference },
     },
-    { upsert: true, returnDocument: 'after', runValidators: true, setDefaultsOnInsert: true }
+    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
   );
 
   // 1. On success, the amount and currency must match the order
@@ -225,7 +225,7 @@ export const applyPaystackPayment = async (order, payment, reference) => {
   const updatedOrder = await Orders.findOneAndUpdate(
     filter,
     { $set: update },
-    { returnDocument: 'after', runValidators: true }
+    { new: true, runValidators: true }
   );
 
   // Another request already marked it PAID between our read and write

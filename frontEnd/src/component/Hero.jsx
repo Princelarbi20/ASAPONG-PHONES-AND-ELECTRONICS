@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/component/Button'
 import { FaAngleRight, FaAngleLeft } from "react-icons/fa"
 import { useNavigate } from 'react-router-dom'
-import axiosInstance, { resolveApiAssetUrl } from '@/lib/axios'
+import { optimizeProductImageUrl, resolveApiAssetUrl } from '@/lib/axios'
+import { getProducts } from '@/lib/productApi'
 
 const Hero = () => {
   const navigate = useNavigate()
@@ -51,7 +52,7 @@ const Hero = () => {
       try {
         setLoading(true);
 
-        const response = await axiosInstance.get('/get-All-product');
+        const response = await getProducts({ summary: true });
 
         let rawProductsList = [];
         if (response.data && Array.isArray(response.data.products)) {
@@ -93,8 +94,8 @@ const Hero = () => {
 
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
-    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return imgStr;
-    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
+    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return optimizeProductImageUrl(imgStr, 1200);
+    return optimizeProductImageUrl(resolveApiAssetUrl(imgStr.replace(/\\/g, '/')), 1200);
   };
 
   const activeDevice = devices[currentIndex];
@@ -185,7 +186,7 @@ const Hero = () => {
               onClick={navigateToProductDetails}
               className="flex-1 h-full w-full min-w-0 flex items-center justify-center z-10 p-2 md:p-4 relative mix-blend-multiply cursor-pointer"
             >
-              <img
+      <img
                 key={currentIndex}
                 src={getSingleImageUrl(activeDevice?.images?.[0])}
                 alt={activeDevice?.name || "Product Banner Image"}

@@ -26,6 +26,27 @@ export const resolveApiAssetUrl = (assetPath) => {
   return `${API_ORIGIN}/${String(assetPath).replace(/^\/+/, '')}`;
 };
 
+// Cloudinary can resize and negotiate format/quality at delivery time. Other
+// image hosts and local assets are left untouched.
+export const optimizeProductImageUrl = (assetUrl, width = 640) => {
+  if (!assetUrl) return assetUrl;
+  try {
+    const url = new URL(assetUrl);
+    if (url.hostname !== 'res.cloudinary.com') return assetUrl;
+    const marker = '/image/upload/';
+    const markerIndex = url.pathname.indexOf(marker);
+    if (markerIndex < 0) return assetUrl;
+    const tail = url.pathname.slice(markerIndex + marker.length);
+    const firstSegment = tail.split('/')[0];
+    if (/^(?:f_|q_|w_|h_|c_|dpr_)/.test(firstSegment)) return assetUrl;
+    const safeWidth = Math.max(200, Math.min(1600, Math.round(width)));
+    url.pathname = `${url.pathname.slice(0, markerIndex + marker.length)}f_auto,q_auto,w_${safeWidth},c_limit/${tail}`;
+    return url.toString();
+  } catch {
+    return assetUrl;
+  }
+};
+
 const axiosInstance = axios.create({
   
   baseURL: API_ENDPOINT_BASE,

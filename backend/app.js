@@ -1,6 +1,7 @@
 import './config/loadEnvironment.js';
 import connectDB from './config/db.js';
 import express from 'express';
+import { jsonCompression } from './middleware/jsonCompression.js';
 import errorHandler from './middleware/errorHandler.js';
 import cors from "cors";
 import path from 'path';
@@ -30,6 +31,7 @@ import { OrderNotificationOutbox } from './modules/orderNotificationOutbox.js';
 import { getTrustedOrigins } from './config/trustedOrigins.js';
 import { AuthAuditLog } from './modules/authAuditLog.js';
 const app = express();
+app.use(jsonCompression);
 // Render terminates TLS through one trusted reverse proxy; req.ip is used by the login limiter and audit trail.
 app.set('trust proxy', 1);
 assertTestEnvironment();

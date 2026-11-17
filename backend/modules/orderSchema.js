@@ -18,7 +18,6 @@ const orderSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Users",
       required() { return this.customerType !== "GUEST"; },
-      index: true,
     },
     customerName: { type: String, trim: true, maxlength: 80 },
     customerEmail: { type: String, trim: true, lowercase: true, maxlength: 254 },
@@ -107,6 +106,8 @@ const orderSchema = new mongoose.Schema(
 );
 
 orderSchema.index({ createdAt: -1, _id: -1 });
+// Supports the customer history filter and stable newest-first pagination.
+orderSchema.index({ user: 1, createdAt: -1, _id: -1 });
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ paymentStatus: 1, createdAt: -1 });
 orderSchema.index({ status: 1, paymentMethod: 1, paymentStatus: 1, expiresAt: 1 });

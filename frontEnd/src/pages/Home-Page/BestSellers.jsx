@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
-import { resolveApiAssetUrl } from '@/lib/axios';
+import { optimizeProductImageUrl, resolveApiAssetUrl } from '@/lib/axios';
 import { getProducts } from '@/lib/productApi';
 import { useNavigate } from "react-router-dom";
 import { formatPrice } from '@/lib/utils';
@@ -35,7 +35,7 @@ const BestSellers = ({ from, end, position }) => {
   const fetchProduct = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await getProducts();
+      const { data } = await getProducts({ summary: true });
 
       let allProducts = [];
       if (data && Array.isArray(data.products)) {
@@ -103,8 +103,8 @@ const BestSellers = ({ from, end, position }) => {
 
   const getSingleImageUrl = (imgStr) => {
     if (!imgStr) return 'https://placehold.co/600x400?text=No+Image';
-    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return imgStr;
-    return resolveApiAssetUrl(imgStr.replace(/\\/g, '/'));
+    if (imgStr.startsWith('http') || imgStr.startsWith('data:')) return optimizeProductImageUrl(imgStr);
+    return optimizeProductImageUrl(resolveApiAssetUrl(imgStr.replace(/\\/g, '/')));
   };
 
   return (

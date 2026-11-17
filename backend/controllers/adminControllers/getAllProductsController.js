@@ -24,7 +24,12 @@ export const getAllProducts = async (req, res) => {
         ? { brand: -1, createdAt: -1 }
         : { createdAt: -1, _id: -1 };
 
-    let productsQuery = Product.find(filter).sort(sort);
+    // Catalog cards/navigation do not need descriptions, specifications,
+    // upload identifiers, or other detail-page fields.
+    const summaryProjection = 'name price oldPrice images stock brand category subcategory newArrival status isBestSelling isDealOfTheWeek isSpeedShopping';
+    let productsQuery = Product.find(filter);
+    if (req.query.summary === 'true') productsQuery = productsQuery.select(summaryProjection);
+    productsQuery = productsQuery.sort(sort);
     let total;
     let pagination;
     if (paginated) {

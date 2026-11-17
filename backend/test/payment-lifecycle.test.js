@@ -97,6 +97,51 @@ test('payment initialization rejects an already-cancelled order before contactin
   assert.equal(fetchCalled, false);
 });
 
+test('Paystack initialization timeout is bounded and leaves a failed attempt available for reconciliation', async (t) => {
+  const envKeys = ['NODE_ENV', 'PAYSTACK_SECRET_KEY', 'PAYSTACK_BASE_URL', 'CLIENT_URL', 'FRONTEND_ORIGIN'];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  t.after(() => {
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  process.env.NODE_ENV = 'test';
+  process.env.PAYSTACK_SECRET_KEY = 'sk_test_timeoutcheck123';
+  process.env.PAYSTACK_BASE_URL = 'https://api.paystack.co';
+  process.env.FRONTEND_ORIGIN = 'https://shop.example';
+
+  const previousFetch = globalThis.fetch;
+  let fetchSignal;
+  globalThis.fetch = async (_url, options) => {
+    fetchSignal = options.signal;
+    const error = new Error('request timed out');
+    error.name = 'TimeoutError';
+    throw error;
+  };
+  t.after(() => { globalThis.fetch = previousFetch; });
+
+  const future = new Date(Date.now() + 60_000);
+  stub(t, Orders, 'findById', () => ({
+    populate: async () => ({
+      _id: 'order-timeout', user: { _id: 'user-1', userName: 'Buyer', email: 'buyer@example.com' },
+      status: 'PENDING', paymentStatus: 'PENDING', paymentMethod: 'ONLINE', expiresAt: future, totalPrice: 100,
+    }),
+  }));
+  stub(t, PaymentAttempt, 'create', async () => ({ _id: 'attempt-timeout' }));
+  let failureUpdate;
+  stub(t, PaymentAttempt, 'findByIdAndUpdate', async (_id, update) => { failureUpdate = update.$set; return {}; });
+
+  const res = makeResponse();
+  await initializePaymentController({ body: { orderId: 'order-timeout' }, user: { id: 'user-1' } }, res);
+
+  assert.ok(fetchSignal instanceof AbortSignal);
+  assert.equal(fetchSignal.aborted, false);
+  assert.equal(res.statusCode, 504);
+  assert.equal(failureUpdate.status, 'FAILED');
+  assert.equal(failureUpdate.metadata.reason, 'PROVIDER_TIMEOUT');
+});
+
 test('verified provider reference must match the requested reference', async () => {
   const result = await applyPaystackPayment(
     { _id: 'order-1', totalPrice: 100, status: 'PENDING', paymentStatus: 'PENDING' },
