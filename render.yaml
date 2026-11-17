@@ -4,7 +4,7 @@ services:
     name: asa-phones-backend
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    dockerContext: .
     envVars:
       - key: NODE_ENV
         value: production
@@ -15,7 +15,7 @@ services:
     name: asa-phones-frontend
     runtime: docker
     dockerfilePath: ./frontEnd/Dockerfile
-    dockerContext: ./frontEnd
+    dockerContext: .
     envVars:
       - key: PORT
         value: "10000"

@@ -1,0 +1,13 @@
+.git
+**/.git
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+**/uploads
+frontEnd/dist
+**/.vite
+**/*.log
+npm-debug.log*
+.DS_Store
+**/.DS_Store
