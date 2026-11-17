@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import bcrypt from 'bcrypt';
-import { getPasswordStrength, isValidPassword, passwordCharacterLength } from '../../shared/passwordPolicy.js';
+import { getPasswordStrength, isValidPassword, passwordCharacterLength } from '../shared/passwordPolicy.js';
 import { hashPassword, verifyPassword } from '../utils/passwordHash.js';
 import { validators } from '../middleware/requestValidation.js';
 

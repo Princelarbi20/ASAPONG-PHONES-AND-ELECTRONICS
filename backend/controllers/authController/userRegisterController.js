@@ -7,7 +7,7 @@ import { buildOtpEmail } from '../../utils/otpEmail.js';
 import { enqueueOtpEmail } from '../../utils/emailOutbox.js';
 import { CACHE_NAMESPACES, invalidateCacheNamespace } from '../../utils/responseCache.js';
 import { hashPassword } from '../../utils/passwordHash.js';
-import { isValidPassword } from '../../../shared/passwordPolicy.js';
+import { isValidPassword } from '../../shared/passwordPolicy.js';
 
 export const userRegisterController = async (req, res) => {
   const requestStartedAt = performance.now();

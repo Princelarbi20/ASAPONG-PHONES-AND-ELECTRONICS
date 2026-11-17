@@ -1,5 +1,5 @@
 import { cleanupPartialUploads } from '../utils/uploadCleanup.js';
-import { isValidPassword } from '../../shared/passwordPolicy.js';
+import { isValidPassword } from '../shared/passwordPolicy.js';
 
 export { isValidPassword };
 

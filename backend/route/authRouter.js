@@ -14,7 +14,7 @@ import { resendOtpController } from "../controllers/authController/resendOtpCont
 import { getAuthSessionController } from "../controllers/authController/getAuthSessionController.js";
 import express from "express"
 import { validateRequest, validators as v } from "../middleware/requestValidation.js";
-import { passwordCharacterLength } from "../../shared/passwordPolicy.js";
+import { passwordCharacterLength } from "../shared/passwordPolicy.js";
 export const authRouter= express.Router()
 
 

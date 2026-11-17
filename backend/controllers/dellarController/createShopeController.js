@@ -2,7 +2,7 @@
 import { ShopRequest } from "../../modules/shopRequestSchema.js";
 import { commitUploadedFiles } from '../../utils/uploadCleanup.js';
 import { hashPassword } from '../../utils/passwordHash.js';
-import { isValidPassword } from '../../../shared/passwordPolicy.js';
+import { isValidPassword } from '../../shared/passwordPolicy.js';
 
 export const createShopRequest = async (req, res, next) => {
   try {

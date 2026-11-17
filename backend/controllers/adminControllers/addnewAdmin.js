@@ -1,7 +1,7 @@
 import { Register } from "../../modules/userRegister.js";
 import { CACHE_NAMESPACES, invalidateCacheNamespace } from "../../utils/responseCache.js";
 import { hashPassword } from '../../utils/passwordHash.js';
-import { isValidPassword } from '../../../shared/passwordPolicy.js';
+import { isValidPassword } from '../../shared/passwordPolicy.js';
 
 export const addnewAdmin = async (req, res) => {
   try {
