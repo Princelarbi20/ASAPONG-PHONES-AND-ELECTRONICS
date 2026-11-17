@@ -83,7 +83,7 @@ export const Footer = () => {
             </div>
 
              <div className="py-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs sm:text-sm text-red-700">
-               <p className='text-center flex'>© 2026 StarTech. All Rights Reserved.</p>
+               <p className='text-center flex'>© 2027 StarTech. All Rights Reserved.</p>
                  <div className="flex gap-4">
             <Link to="/" className="hover:underline">Terms</Link>
             <Link to="/" className="hover:underline">Privacy</Link>
