@@ -1,15 +1,15 @@
 FROM node:22-alpine
 
-WORKDIR /app/backend
+WORKDIR /app
 
 ENV NODE_ENV=production
+ENV PORT=10000
 
-COPY backend/package*.json ./
+COPY package*.json ./
 
 RUN npm ci --omit=dev && npm cache clean --force
 
-COPY backend/ ./
-COPY shared/ /app/shared/
+COPY . .
 
 EXPOSE 10000
 
