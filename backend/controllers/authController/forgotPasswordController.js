@@ -1,11 +1,12 @@
 
 import bcrypt from "bcrypt";
+import { randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 
 import { Register } from "../../modules/userRegister.js";
 import { PasswordResetOTP } from "../../modules/passwordResetOTP.js";
 
-import sendEmail from "../../utils/nodemailer.js";
-import { escapeHtml } from "../../utils/escapeHtml.js";
+import { enqueuePasswordResetEmail, wakeEmailOutboxWorker } from '../../utils/emailOutbox.js';
 
 import {
     createResetOtp,
@@ -27,6 +28,7 @@ const genericResponse = (flowId, expiresAt) => ({
 
 
 export const forgotPasswordController = async (req, res) => {
+    const startedAt = performance.now();
     let flowId;
     let flowExpiresAt;
     try {
@@ -170,31 +172,37 @@ export const forgotPasswordController = async (req, res) => {
             return res.status(200).json(genericResponse(flowId, flowExpiresAt));
         }
 
-        // 11. Send OTP email
-        const result = await sendEmail({
-            to: user.email,
-
-            subject: "Your Asa Phones Password Reset Code",
-
-            text: `
+        // SMTP runs in the existing encrypted outbox worker, not on this request path.
+        const frontendOrigin = (process.env.FRONTEND_ORIGIN || 'http://localhost:5173').split(',')[0].trim();
+        const verificationUrl = new URL('/auth/verify-reset-otp', frontendOrigin);
+        verificationUrl.hash = new URLSearchParams({ flowId }).toString();
+        try {
+          await enqueuePasswordResetEmail({
+            requestId: randomUUID(),
+            userId: user._id,
+            otpHash,
+            message: {
+              to: user.email,
+              subject: "Your Asa Phones Password Reset Code",
+              text: `
 Your Asa Phones password reset code is: ${otp}
 
 This code expires in 5 minutes.
 
 Do not share this code with anyone.
 If you did not request this, you can ignore this email.
-            `,
-
-            html: getPasswordResetOtpEmail({
-                userName: escapeHtml(user.userName || "Customer"),
+${verificationUrl.toString()}
+              `,
+              html: getPasswordResetOtpEmail({
+                userName: user.userName || "Customer",
                 otp,
-                expiresMinutes: 5
-            })
-        });
-
-        // 12. Handle email delivery failure
-        if (!result?.success) {
-
+                expiresMinutes: 5,
+                verificationUrl: verificationUrl.toString(),
+              }),
+            },
+          });
+          if (process.env.NODE_ENV !== 'test') wakeEmailOutboxWorker();
+        } catch (queueError) {
             await PasswordResetOTP.updateOne(
                 {
                     userId: user._id,
@@ -209,23 +217,22 @@ If you did not request this, you can ignore this email.
                     }
                 }
             );
-
-            console.error(
-                "Password reset email delivery failed."
-            );
-
-            return res.status(200).json(genericResponse(flowId, flowExpiresAt));
+            throw queueError;
         }
 
-        // 13. Return generic response
+        console.info('[performance] password_reset_request', JSON.stringify({
+          requestId: req.id,
+          result: 'email_queued',
+          totalMs: Number((performance.now() - startedAt).toFixed(1)),
+        }));
         return res.status(200).json(genericResponse(flowId, flowExpiresAt));
 
     } catch (error) {
 
-        console.error(
-            "Forgot password request failed:",
-            error?.message || "Unknown error"
-        );
+        console.error('[password-reset] request_failed', JSON.stringify({
+          requestId: req.id,
+          errorCode: error?.code || error?.name || 'request_failed',
+        }));
 
         return res.status(200).json(genericResponse(flowId, flowExpiresAt));
     }

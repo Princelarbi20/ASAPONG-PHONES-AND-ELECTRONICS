@@ -4,18 +4,24 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { Register } from '../modules/userRegister.js';
 import { PasswordResetOTP } from '../modules/passwordResetOTP.js';
+import { AuthAuditLog } from '../modules/authAuditLog.js';
+import { EmailOutbox } from '../modules/emailOutbox.js';
+import { enqueuePasswordResetEmail, processEmailOutbox } from '../utils/emailOutbox.js';
 import { forgotPasswordController } from '../controllers/authController/forgotPasswordController.js';
 import { resendResetOtpController } from '../controllers/authController/resendResetOtpController.js';
 import { verifyResetOtpController } from '../controllers/authController/verifyResetOtpController.js';
 import { completeForgotPasswordResetController } from '../controllers/authController/resetPasswordController.js';
-import { wasRecipientAccepted } from '../utils/nodemailer.js';
+import { createEmailSender } from '../utils/emailTransport.js';
 import { userLoginController } from '../controllers/authController/userloginController.js';
 import { verifyToken } from '../middleware/verifyToken.js';
 import { createResetFlowId, hashResetSecret, RESET_FLOW_TTL_MS, verifyResetFlowId } from '../utils/passwordReset.js';
+import { verifyPassword } from '../utils/passwordHash.js';
 
 const originalEnv = process.env.NODE_ENV;
 const originalResetFlowSecret = process.env.RESET_FLOW_SECRET;
+const originalRefreshTokenSecret = process.env.REFRESH_TOKEN_SECRET;
 process.env.RESET_FLOW_SECRET = 'isolated-password-reset-flow-test-secret';
+process.env.REFRESH_TOKEN_SECRET = 'isolated-email-outbox-secret-at-least-32-chars';
 const validId = '64b000000000000000000001';
 const stub = (t, object, key, implementation) => {
   const originalMethod = object[key];
@@ -34,23 +40,47 @@ const userWithPassword = async () => ({
   role: 'USER', tokenVersion: 2, password: await bcrypt.hash('OldPassword1!', 4), save: async function save() {},
 });
 
-test('email delivery is successful only when SMTP accepts the intended recipient', () => {
-  assert.equal(wasRecipientAccepted({ accepted: ['person@example.com'], rejected: [] }, 'person@example.com'), true);
-  assert.equal(wasRecipientAccepted({ accepted: ['other@example.com'], rejected: [] }, 'person@example.com'), false);
-  assert.equal(wasRecipientAccepted({ accepted: ['person@example.com'], rejected: ['person@example.com'] }, 'person@example.com'), false);
-  assert.equal(wasRecipientAccepted({ accepted: [] }, 'person@example.com'), false);
+test('Gmail SMTP adapter reports accepted and rejected recipients safely', async () => {
+  const calls = [];
+  const sender = createEmailSender({ transportFactory: (options) => { calls.push(options); return { sendMail: async (message) => { calls.push(message); return { messageId: 'gmail-test', accepted: ['person@example.com'] }; } }; }, env: { EMAIL_USER: 'store@gmail.com', EMAIL_PASS: 'test-app-password' }, logger: { info() {}, error() {} } });
+  const result = await sender({ to: 'person@example.com', subject: 'Test', text: 'Message', idempotencyKey: 'event-1' });
+  assert.equal(result.success, true);
+  assert.equal(result.messageId, 'gmail-test');
+  assert.equal(calls[0].service, 'gmail');
+  assert.equal(calls[0].connectionTimeout, 10_000);
+  assert.equal(calls[0].greetingTimeout, 10_000);
+  assert.equal(calls[0].socketTimeout, 15_000);
+  assert.equal(calls[0].auth.user, 'store@gmail.com');
+  assert.equal(calls[1].to, 'person@example.com');
+  assert.equal(calls[1].from, 'store@gmail.com');
+});
+
+test('Gmail SMTP failures return safe errors and never log credentials or message content', async () => {
+  const logged = [];
+  const sender = createEmailSender({
+    transportFactory: () => ({ sendMail: async () => { throw Object.assign(new Error('app-password-and-reset-token'), { code: 'EAUTH' }); } }),
+    env: { EMAIL_USER: 'store@gmail.com', EMAIL_PASS: 'private-app-password' },
+    logger: { info() {}, error: (...args) => logged.push(args.join(' ')) },
+  });
+  const result = await sender({ to: 'person@example.com', subject: 'Reset', text: 'secret-code-123456' });
+  assert.equal(result.success, false);
+  assert.equal(result.error.code, 'EAUTH');
+  assert.ok(!logged.join(' ').includes('private-app-password'));
+  assert.ok(!logged.join(' ').includes('secret-code-123456'));
 });
 
 test('forgot password returns a generic response and persists only a hashed OTP', async (t) => {
   process.env.NODE_ENV = 'test';
   const user = await userWithPassword();
   let savedUpdate;
+  let queuedEmail;
   stub(t, Register, 'findOne', async (filter) => {
     assert.deepEqual(filter, { email: user.email, isVerified: true, isSuspended: false });
     return user;
   });
   stub(t, PasswordResetOTP, 'findOne', () => ({ select: async () => null }));
   stub(t, PasswordResetOTP, 'findOneAndUpdate', async (_filter, update) => { savedUpdate = update; return {}; });
+  stub(t, EmailOutbox, 'create', async (record) => { queuedEmail = record; return record; });
   const res = response();
   await forgotPasswordController({ body: { email: user.email } }, res);
   assert.equal(res.statusCode, 200);
@@ -64,6 +94,42 @@ test('forgot password returns a generic response and persists only a hashed OTP'
   assert.equal(savedUpdate.$set.otpHash.length, 60);
   assert.equal(savedUpdate.$set.otpExpiresAt.getTime() - Date.now() <= 5 * 60 * 1000, true);
   assert.equal(savedUpdate.$set.authorizationHash, null);
+  assert.equal(queuedEmail.kind, 'password_reset');
+  assert.equal(queuedEmail.otpVersion, savedUpdate.$set.otpHash);
+  assert.equal(queuedEmail.to, undefined, 'reset email address and OTP message are encrypted in the outbox');
+});
+
+test('reset email template includes a direct verification route and escapes untrusted content', async () => {
+  const { getPasswordResetOtpEmail } = await import('../utils/passwordReset.js');
+  const html = getPasswordResetOtpEmail({ userName: '<script>x</script>', otp: '123456', expiresMinutes: 5, verificationUrl: 'https://shop.example/auth/verify-reset-otp#flowId=opaque' });
+  assert.ok(!html.includes('<script>x</script>'));
+  assert.ok(html.includes('https://shop.example/auth/verify-reset-otp#flowId=opaque'));
+  assert.ok(html.includes('Open verification page'));
+});
+
+test('reset outbox delivers through the worker only while its hashed OTP remains current', async (t) => {
+  const user = { _id: validId, isVerified: true, isSuspended: false };
+  const otpHash = 'bcrypt-reset-hash';
+  const resetRecord = { otpHash, otpExpiresAt: new Date(Date.now() + 60_000) };
+  let job;
+  let delivered;
+  stub(t, EmailOutbox, 'create', async (record) => {
+    job = { ...record, _id: 'reset-email-job', attempts: 1, status: 'sending' };
+    return job;
+  });
+  stub(t, EmailOutbox, 'updateMany', async () => ({ modifiedCount: 0 }));
+  stub(t, EmailOutbox, 'findOneAndUpdate', () => ({ select: async () => job }));
+  stub(t, EmailOutbox, 'updateOne', async (_filter, update) => { Object.assign(job, update.$set); return { modifiedCount: 1 }; });
+  stub(t, Register, 'findById', () => ({ select: async () => user }));
+  stub(t, PasswordResetOTP, 'findOne', () => ({ select: async () => resetRecord }));
+  await enqueuePasswordResetEmail({
+    requestId: 'reset-request-test', userId: validId, otpHash,
+    message: { to: user.email || 'person@example.com', subject: 'Reset code', text: 'Code 123456' },
+  });
+  await processEmailOutbox({ send: async (message) => { delivered = message; return { success: true, messageId: 'smtp-accepted' }; } });
+  assert.equal(job.status, 'sent');
+  assert.equal(delivered.subject, 'Reset code');
+  assert.match(delivered.headers['Message-ID'], /asapong-phones\.local/);
 });
 
 test('unknown email receives the same generic forgot password response', async (t) => {
@@ -172,7 +238,7 @@ test('repeated requests over the account limit remain generic and do not issue a
   assert.equal(verifyResetFlowId(res.body.flowId, user.email), true);
 });
 
-test('email delivery failure clears the OTP and keeps the generic flow response', async (t) => {
+test('reset queue failure clears only the matching OTP and keeps the generic response', async (t) => {
   const previousEnv = process.env.NODE_ENV;
   const previousEmailUser = process.env.EMAIL_USER;
   const previousEmailPass = process.env.EMAIL_PASS;
@@ -201,6 +267,7 @@ test('email delivery failure clears the OTP and keeps the generic flow response'
     clearedOtp = update.$set.otpHash === null && update.$set.otpExpiresAt === null && update.$set.flowIdHash === null && update.$set.flowIdExpiresAt === null;
     return { modifiedCount: 1 };
   });
+  stub(t, EmailOutbox, 'create', async () => { throw Object.assign(new Error('queue write failed'), { code: 'EQUEUE' }); });
   const res = response();
   await forgotPasswordController({ body: { email: user.email } }, res);
   assert.equal(res.statusCode, 200);
@@ -221,12 +288,14 @@ test('resending replaces the old hashed OTP and resets attempts and expiry', asy
     requestCount: 1, requestWindowStartedAt: new Date(),
   };
   let savedUpdate;
+  let queuedEmail;
   stub(t, Register, 'findOne', async () => user);
   stub(t, PasswordResetOTP, 'findOne', () => ({ select: async () => record }));
   stub(t, PasswordResetOTP, 'findOneAndUpdate', async (_filter, update) => {
     savedUpdate = update;
     return { ...record, ...update.$set };
   });
+  stub(t, EmailOutbox, 'create', async (outboxRecord) => { queuedEmail = outboxRecord; return outboxRecord; });
   const res = response();
   await resendResetOtpController({ body: { email: user.email, flowId } }, res);
   assert.equal(res.statusCode, 200);
@@ -236,6 +305,8 @@ test('resending replaces the old hashed OTP and resets attempts and expiry', asy
   assert.equal(savedUpdate.$set.authorizationHash, null);
   assert.equal(savedUpdate.$set.authorizationExpiresAt, null);
   assert.equal(savedUpdate.$set.otpExpiresAt.getTime() - Date.now() <= 5 * 60 * 1000, true);
+  assert.equal(queuedEmail.kind, 'password_reset');
+  assert.equal(queuedEmail.otpVersion, savedUpdate.$set.otpHash);
 });
 
 test('correct OTP creates a single-use authorization and resets password and token version', async (t) => {
@@ -252,6 +323,12 @@ test('correct OTP creates a single-use authorization and resets password and tok
     otpAttempts: 0, authorizationHash: null, authorizationExpiresAt: null,
   };
   stub(t, Register, 'findOne', (filter) => ({ select: async () => filter.email === user.email ? user : null }));
+  stub(t, Register, 'findOneAndUpdate', async (_filter, pipeline) => {
+    const set = pipeline[0].$set;
+    user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+    user.lockUntil = user.failedLoginAttempts >= 7 ? new Date(Date.now() + 15 * 60 * 1000) : null;
+    return { failedLoginAttempts: user.failedLoginAttempts, lockUntil: user.lockUntil };
+  });
   stub(t, PasswordResetOTP, 'findOne', () => ({ select: async () => storedRecord }));
   stub(t, PasswordResetOTP, 'findOneAndUpdate', async (filter, update) => {
     const set = update.$set;
@@ -267,6 +344,7 @@ test('correct OTP creates a single-use authorization and resets password and tok
   stub(t, PasswordResetOTP, 'deleteOne', async () => ({ deletedCount: 1 }));
   let persistedPassword = user.password;
   user.save = async () => { persistedPassword = user.password; };
+  stub(t, AuthAuditLog, 'create', async (event) => event);
   const verifyResponse = response();
   await verifyResetOtpController({ body: { email: user.email, flowId, otp: '123456' } }, verifyResponse);
   assert.equal(verifyResponse.statusCode, 200);
@@ -283,7 +361,7 @@ test('correct OTP creates a single-use authorization and resets password and tok
   assert.equal(resetResponse.statusCode, 200);
   assert.equal(user.tokenVersion, 3);
   assert.deepEqual(resetResponse.clearedCookies.map(({ name }) => name), ['accessToken', 'refreshToken']);
-  assert.equal(await bcrypt.compare('NewPassword2!', persistedPassword), true);
+  assert.equal(await verifyPassword('NewPassword2!', persistedPassword), true);
 
   stub(t, Register, 'updateOne', async () => ({ modifiedCount: 1 }));
   const oldLogin = response();
@@ -354,7 +432,7 @@ test('weak password is rejected before reset authorization can be consumed', asy
   const res = response();
   await completeForgotPasswordResetController({ body: { email: user.email, resetAuthorization: 'a'.repeat(43), newPassword: 'weak' } }, res);
   assert.equal(res.statusCode, 400);
-  assert.match(res.body.message, /at least 8 characters/i);
+  assert.match(res.body.message, /8–128 characters/i);
 });
 
 after(() => {
@@ -362,4 +440,6 @@ after(() => {
   else process.env.NODE_ENV = originalEnv;
   if (originalResetFlowSecret === undefined) delete process.env.RESET_FLOW_SECRET;
   else process.env.RESET_FLOW_SECRET = originalResetFlowSecret;
+  if (originalRefreshTokenSecret === undefined) delete process.env.REFRESH_TOKEN_SECRET;
+  else process.env.REFRESH_TOKEN_SECRET = originalRefreshTokenSecret;
 });

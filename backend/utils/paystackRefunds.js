@@ -47,7 +47,7 @@ const applyProviderRefundState = async (refund, providerRefund) => {
     const order = await Orders.findOneAndUpdate(
       { _id: refund.order, paymentStatus: 'PAID', status: { $nin: ['CANCELLED', 'EXPIRED'] } },
       { $set: { paymentStatus: 'REVERSED' } },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
     orderWasReversed = Boolean(order);
   }
@@ -61,7 +61,7 @@ const applyProviderRefundState = async (refund, providerRefund) => {
       lastCheckedAt: new Date(),
       ...(status === 'PROCESSED' ? { processedAt: providerRefund.refunded_at ? new Date(providerRefund.refunded_at) : new Date() } : {}),
     },
-  }, { new: true, runValidators: true });
+  }, { returnDocument: 'after', runValidators: true });
 
   await PaymentAttempt.findByIdAndUpdate(refund.paymentAttempt, {
     $set: {
@@ -102,7 +102,7 @@ export const getOrCreatePaystackRefund = async ({ order, paymentAttempt, amountS
           status: 'REQUESTED',
         },
       },
-      { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true },
+      { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true, runValidators: true },
     );
   } catch (error) {
     if (error?.code !== 11000) throw error;
@@ -149,7 +149,7 @@ export const processPaystackRefund = async (refundId) => {
           providerResponse: String(payload.message || 'Paystack rejected the refund request.').slice(0, 1000),
           lastCheckedAt: new Date(),
         },
-      }, { new: true });
+      }, { returnDocument: 'after' });
       await PaymentAttempt.findByIdAndUpdate(refund.paymentAttempt, { $set: { refundStatus: 'FAILED' } });
       return failed;
     }

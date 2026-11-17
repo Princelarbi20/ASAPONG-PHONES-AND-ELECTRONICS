@@ -6,6 +6,8 @@ import { getOtpExpiryMs, OTP_RESEND_COOLDOWN_MS } from '../../config/otp.js';
 import { buildOtpEmail } from '../../utils/otpEmail.js';
 import { enqueueOtpEmail } from '../../utils/emailOutbox.js';
 import { CACHE_NAMESPACES, invalidateCacheNamespace } from '../../utils/responseCache.js';
+import { hashPassword } from '../../utils/passwordHash.js';
+import { isValidPassword } from '../../../shared/passwordPolicy.js';
 
 export const userRegisterController = async (req, res) => {
   const requestStartedAt = performance.now();
@@ -37,8 +39,8 @@ export const userRegisterController = async (req, res) => {
     if (cleanPhone.length !== 10) {
       return res.status(400).json({ success: false, message: 'Phone verification failure. Contact number must be 10 digits long.' });
     }
-    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/.test(password)) {
-      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters and include uppercase, lowercase, numbers, and special characters.' });
+    if (!isValidPassword(password)) {
+      return res.status(400).json({ success: false, message: 'Password must be 8–128 characters and cannot be a commonly used password.' });
     }
 
     const otpStartedAt = performance.now();
@@ -46,7 +48,7 @@ export const userRegisterController = async (req, res) => {
     const otpVersion = randomUUID();
     timings.otpGenerationMs = Number((performance.now() - otpStartedAt).toFixed(1));
     const [hashedPassword, hashOtp] = await Promise.all([
-      measure('passwordHashMs', () => bcrypt.hash(password, 10)),
+      measure('passwordHashMs', () => hashPassword(password, 10)),
       measure('otpHashMs', () => bcrypt.hash(otp, 10)),
     ]);
     const otpExpiryMs = getOtpExpiryMs();

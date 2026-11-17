@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import nodemailer from 'nodemailer';
 import jwt from 'jsonwebtoken';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
@@ -14,7 +13,7 @@ import { processEmailOutbox } from '../utils/emailOutbox.js';
 test('registration email, OTP verification, and automatic sign-in work in production mode', async (t) => {
   const envKeys = [
     'NODE_ENV', 'FRONTEND_ORIGIN', 'ACCESS_TOKEN_SECRET', 'REFRESH_TOKEN_SECRET',
-    'ACCESS_TOKEN_EXPIRE', 'REFRESH_TOKEN_EXPIRE', 'EMAIL_SINK', 'EMAIL_USER', 'EMAIL_PASS',
+    'ACCESS_TOKEN_EXPIRE', 'REFRESH_TOKEN_EXPIRE', 'EMAIL_SINK', 'EMAIL_USER', 'EMAIL_PASS', 'EMAIL_FROM',
   ];
   const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
   Object.assign(process.env, {
@@ -24,8 +23,9 @@ test('registration email, OTP verification, and automatic sign-in work in produc
     REFRESH_TOKEN_SECRET: 'production-flow-refresh-secret-for-integration-test',
     ACCESS_TOKEN_EXPIRE: '15m',
     REFRESH_TOKEN_EXPIRE: '7d',
-    EMAIL_USER: 'test-sender@example.test',
-    EMAIL_PASS: 'test-only-password',
+    EMAIL_USER: 'test-sender@gmail.com',
+    EMAIL_PASS: 'test-app-password',
+    EMAIL_FROM: 'test-sender@gmail.com',
   });
   delete process.env.EMAIL_SINK;
   const [{ authRouter }, { csrfProtection, issueCsrfToken }] = await Promise.all([
@@ -118,24 +118,17 @@ test('registration email, OTP verification, and automatic sign-in work in produc
     EmailOutbox.updateOne = originalOutboxUpdateOne;
   });
 
-  const originalCreateTransport = nodemailer.createTransport;
-  nodemailer.createTransport = () => ({
-    sendMail: async (message) => {
+  const sendTestEmail = async (message) => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       emailDeliveryCount += 1;
       const otpMatch = message.html.match(/<span[^>]*>\s*(\d{6})\s*<\/span>/i);
       deliveredOtp = otpMatch?.[1] || null;
       if (failNextEmail) {
         failNextEmail = false;
-        const temporaryError = new Error('temporary provider outage');
-        temporaryError.code = 'ETEMP';
-        throw temporaryError;
+        return { success: false, error: { code: 'ETEMP' } };
       }
-      return { accepted: [message.to], rejected: [] };
-    },
-    close() {},
-  });
-  t.after(() => { nodemailer.createTransport = originalCreateTransport; });
+      return { success: true, messageId: `gmail-test-${emailDeliveryCount}` };
+  };
 
   const app = express();
   app.use(cors({ origin: 'https://shop.example', credentials: true }));
@@ -198,11 +191,11 @@ test('registration email, OTP verification, and automatic sign-in work in produc
   assert.equal(registrationResponse.headers.getSetCookie().some((cookie) => /(?:accessToken|refreshToken)=/.test(cookie)), false);
   assert.equal(emailDeliveryCount, 0, 'registration responds after durably queueing without waiting for SMTP');
   assert.equal(outboxJob.status, 'pending');
-  await processEmailOutbox();
+  await processEmailOutbox({ send: sendTestEmail });
   assert.equal(outboxJob.status, 'pending', 'temporary mail failure remains queued for retry');
   assert.equal(emailDeliveryCount, 1);
   outboxJob.nextAttemptAt = new Date(0);
-  await processEmailOutbox();
+  await processEmailOutbox({ send: sendTestEmail });
   assert.equal(emailDeliveryCount, 2, 'outbox worker retries and sends the queued OTP email asynchronously');
   assert.equal(outboxJob.status, 'sent');
   assert.match(deliveredOtp || '', /^\d{6}$/);
@@ -238,7 +231,7 @@ test('registration email, OTP verification, and automatic sign-in work in produc
   assert.equal(resendResponse.status, 200);
   assert.equal(emailDeliveryCount, 2, 'resend response does not wait for SMTP');
   outboxJob.nextAttemptAt = new Date(0);
-  await processEmailOutbox();
+  await processEmailOutbox({ send: sendTestEmail });
   assert.equal(outboxJob.status, 'sent');
   assert.equal(emailDeliveryCount, 3);
   assert.notEqual(deliveredOtp, originalOtp, 'resend replaces the active code');

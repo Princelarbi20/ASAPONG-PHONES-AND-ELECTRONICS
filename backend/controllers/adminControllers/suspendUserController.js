@@ -1,5 +1,5 @@
 import { Register } from "../../modules/userRegister.js";
-import sendEmail from "../../utils/nodemailer.js";
+import sendEmail from "../../utils/emailTransport.js";
 import { escapeHtml } from "../../utils/escapeHtml.js";
 import { CACHE_NAMESPACES, invalidateCacheNamespace } from "../../utils/responseCache.js";
 
@@ -23,7 +23,6 @@ export const suspendUserController = async (req,res,next) => {
     await invalidateCacheNamespace(CACHE_NAMESPACES.adminUsers);
 
     await sendEmail({
-            from: process.env.EMAIL_USER,
             to: user.email,
             subject: "Account Suspension Notice",
             html: `

@@ -1,7 +1,7 @@
 import { Orders } from "../modules/orderSchema.js";
 import { CACHE_NAMESPACES, invalidateCacheNamespaces } from "./responseCache.js";
 import { PaymentAttempt } from "../modules/paymentAttemptSchema.js";
-import { sendOrderConfirmationEmail } from "./orderEmail.js";
+import { enqueueOrderNotification } from './orderNotificationOutbox.js';
 import { requestPaystackRefund } from './paystackRefunds.js';
 import { expireOnlineOrder } from './orderExpiryWorker.js';
 
@@ -121,7 +121,7 @@ export const applyPaystackPayment = async (order, payment, reference) => {
       },
       $setOnInsert: { reference: payment.reference || reference },
     },
-    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: 'after', runValidators: true, setDefaultsOnInsert: true }
   );
 
   // 1. On success, the amount and currency must match the order
@@ -225,7 +225,7 @@ export const applyPaystackPayment = async (order, payment, reference) => {
   const updatedOrder = await Orders.findOneAndUpdate(
     filter,
     { $set: update },
-    { new: true, runValidators: true }
+    { returnDocument: 'after', runValidators: true }
   );
 
   // Another request already marked it PAID between our read and write
@@ -268,12 +268,23 @@ export const applyPaystackPayment = async (order, payment, reference) => {
 
   await invalidateCacheNamespaces(CACHE_NAMESPACES.adminOrders, CACHE_NAMESPACES.userOrders);
 
-  // 5. Send the confirmation email exactly once: only the request that
-  //    actually flipped the order to PAID gets here.
   if (paymentStatus === "PAID") {
-    sendOrderConfirmationEmail(updatedOrder._id).catch((err) =>
-      console.error("Order confirmation email failed to send:", err)
-    );
+    try {
+      await enqueueOrderNotification({
+        orderId: updatedOrder._id,
+        eventKey: `order:${updatedOrder._id}:payment-confirmation`,
+        type: 'PAYMENT_CONFIRMATION',
+        data: {
+          reference: payment.reference || reference,
+          amount: Number(payment.amount) / 100,
+          paymentMethod: payment.channel || 'Paystack',
+        },
+      });
+    } catch (error) {
+      // Payment has already been authoritatively recorded. Queue errors are
+      // logged for the recovery worker and must not alter payment status.
+      console.error('[order-email] payment_enqueue_failed', JSON.stringify({ orderId: String(updatedOrder._id), errorCode: error?.code || error?.name }));
+    }
   }
 
   return {

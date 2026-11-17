@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import axiosInstance from '../../lib/axios';
 import { Eye, EyeOff } from 'lucide-react';
+import { isValidPassword } from '../../../../shared/passwordPolicy.js';
+import PasswordStrengthIndicator from '@/component/PasswordStrengthIndicator';
 import { useNavigate } from 'react-router-dom'; // 👈 Added React Router Hook
 
 export const ShopRegister = () => {
@@ -95,7 +97,7 @@ export const ShopRegister = () => {
     if (!formData.description.trim() || formData.description.trim().length > 5000) return setError('Description is required and must be 5,000 characters or fewer.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) return setError('Enter a valid business email address.');
     if (!/^(?:\+?233\d{9}|0\d{9})$/.test(phoneDigits)) return setError('Enter a valid Ghana phone number.');
-    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/.test(formData.password)) return setError('Password must be 8–128 characters with uppercase, lowercase, a number, and a symbol.');
+    if (!isValidPassword(formData.password)) return setError('Password must be 8-128 characters and cannot be commonly used.');
     if (files.length === 0) return setError('Upload at least one PDF certificate.');
     setLoading(true);
     setError('');
@@ -364,7 +366,7 @@ export const ShopRegister = () => {
                 name="password"
                 required
                 minLength={8}
-                maxLength={128}
+                maxLength={256}
                 value={formData.password}
                 onChange={handleInputChange}
                 className="mt-1 block w-full px-3 py-2 pr-12 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"

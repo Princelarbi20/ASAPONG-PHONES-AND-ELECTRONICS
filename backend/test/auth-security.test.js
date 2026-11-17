@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { Register } from '../modules/userRegister.js';
 import { ShopRequest } from '../modules/shopRequestSchema.js';
+import { AuthAuditLog } from '../modules/authAuditLog.js';
 import { userLoginController } from '../controllers/authController/userloginController.js';
 import { userLogoutController } from '../controllers/authController/userlogOutController.js';
 import { resetPasswordController } from '../controllers/authController/resetPasswordController.js';
@@ -51,6 +52,7 @@ const makeUser = async (overrides = {}) => ({
   isVerified: true,
   isSuspended: false,
   failedLoginAttempts: 0,
+  consecutiveLockouts: 0,
   lockUntil: null,
   tokenVersion: 0,
   cart: [],
@@ -74,9 +76,32 @@ const stubMethod = (t, object, key, implementation) => {
   t.after(() => { object[key] = original; });
 };
 
-const stubLoginRecords = (t, { user = null, dealer = null } = {}) => {
+const stubLoginRecords = (t, { user = null, dealer = null, auditEvents = [] } = {}) => {
   stubMethod(t, Register, 'findOne', (filter) => ({ select: async () => filter.email === user?.email ? user : null }));
   stubMethod(t, ShopRequest, 'findOne', (filter) => ({ select: async () => filter.email === dealer?.email ? dealer : null }));
+  const failOneAttempt = (account) => async () => {
+    if (!account) return null;
+    if (account.lockUntil && account.lockUntil > Date.now()) return null;
+    if (account.lockUntil && account.lockUntil <= Date.now()) account.failedLoginAttempts = 0;
+    account.failedLoginAttempts = (account.failedLoginAttempts || 0) + 1;
+    if (account.failedLoginAttempts >= 7) {
+      account.consecutiveLockouts = (account.consecutiveLockouts || 0) + 1;
+      const duration = [15, 30, 60][Math.min(account.consecutiveLockouts - 1, 2)];
+      account.lockUntil = new Date(Date.now() + duration * 60 * 1000);
+    } else if (account.lockUntil && account.lockUntil <= Date.now()) {
+      account.lockUntil = null;
+    }
+    return {
+      failedLoginAttempts: account.failedLoginAttempts,
+      consecutiveLockouts: account.consecutiveLockouts,
+      lockUntil: account.lockUntil,
+    };
+  };
+  stubMethod(t, Register, 'findOneAndUpdate', failOneAttempt(user));
+  stubMethod(t, ShopRequest, 'findOneAndUpdate', failOneAttempt(dealer));
+  stubMethod(t, Register, 'updateOne', async () => ({ acknowledged: true, matchedCount: 1, modifiedCount: 1 }));
+  stubMethod(t, ShopRequest, 'updateOne', async () => ({ acknowledged: true, matchedCount: 1, modifiedCount: 1 }));
+  stubMethod(t, AuthAuditLog, 'create', async (entry) => { auditEvents.push(entry); return entry; });
 };
 
 test('regular user login sets access and refresh cookies and preserves the response shape', async (t) => {
@@ -163,26 +188,20 @@ test('approved dealer login issues dealer tokens', async (t) => {
   assert.equal(jwt.verify(res.cookies[0].value, process.env.ACCESS_TOKEN_SECRET).accountType, 'DEALER');
 });
 
-test('dealer failed-password attempts use the temporary account lockout', async (t) => {
+test('dealer failed-password attempts lock only on the seventh failure', async (t) => {
   const dealer = await makeUser({ role: 'DEALER', status: 'APPROVED' });
-  let attempts = 0;
-  let lockUntil = null;
   stubLoginRecords(t, { dealer });
-  stubMethod(t, ShopRequest, 'updateOne', async () => {
-    if (attempts >= 3 && lockUntil > Date.now()) return { modifiedCount: 0 };
-    attempts += 1;
-    if (attempts >= 3) lockUntil = new Date(Date.now() + 50 * 60 * 1000);
-    return { modifiedCount: 1 };
-  });
-
   const responses = [];
-  for (let count = 0; count < 4; count += 1) {
+  for (let count = 0; count < 7; count += 1) {
     const res = makeResponse();
     await userLoginController({ body: { email: dealer.email, password: 'WrongPassword1!' } }, res);
     responses.push(res);
   }
 
-  assert.deepEqual(responses.map((res) => res.statusCode), [401, 401, 401, 403]);
+  assert.deepEqual(responses.map((res) => res.statusCode), [401, 401, 401, 401, 401, 401, 401]);
+  assert.ok(dealer.lockUntil.getTime() - Date.now() <= 15 * 60 * 1000);
+  assert.ok(dealer.lockUntil.getTime() - Date.now() > 14 * 60 * 1000);
+  assert.equal(dealer.consecutiveLockouts, 1);
 });
 
 test('incorrect passwords and unknown emails return the same generic response', async (t) => {
@@ -196,7 +215,7 @@ test('incorrect passwords and unknown emails return the same generic response', 
 
   assert.equal(badPassword.statusCode, 401);
   assert.equal(unknown.statusCode, 401);
-  assert.equal(badPassword.body.message, unknown.body.message);
+  assert.deepEqual(badPassword.body, unknown.body);
 });
 
 test('unverified and suspended users cannot log in', async (t) => {
@@ -215,27 +234,105 @@ test('unverified and suspended users cannot log in', async (t) => {
   assert.match(suspendedResponse.body.message, /suspended/i);
 });
 
-test('three bad passwords set a timed lock and the next attempt is rejected', async (t) => {
+test('seven consecutive bad passwords lock for 15 minutes and record audit events', async (t) => {
   const user = await makeUser();
-  let attempts = 0;
-  let lockUntil = null;
-  stubLoginRecords(t, { user });
-  stubMethod(t, Register, 'updateOne', async () => {
-    if (attempts >= 3 && lockUntil > Date.now()) return { modifiedCount: 0 };
-    attempts += 1;
-    if (attempts >= 3) lockUntil = new Date(Date.now() + 50 * 60 * 1000);
-    return { modifiedCount: 1 };
-  });
+  const auditEvents = [];
+  stubLoginRecords(t, { user, auditEvents });
 
   const responses = [];
-  for (let count = 0; count < 4; count += 1) {
+  for (let count = 0; count < 7; count += 1) {
     const res = makeResponse();
     await userLoginController({ body: { email: user.email, password: 'WrongPassword1!' } }, res);
     responses.push(res);
   }
 
-  assert.deepEqual(responses.map((res) => res.statusCode), [401, 401, 401, 403]);
-  assert.ok(lockUntil > Date.now());
+  assert.deepEqual(responses.map((res) => res.statusCode), [401, 401, 401, 401, 401, 401, 401]);
+  assert.equal(user.failedLoginAttempts, 7);
+  assert.ok(user.lockUntil.getTime() - Date.now() <= 15 * 60 * 1000);
+  assert.ok(user.lockUntil.getTime() - Date.now() > 14 * 60 * 1000);
+  assert.equal(auditEvents.length, 7);
+  assert.equal(auditEvents.at(-1).event, 'ACCOUNT_LOCKED');
+  assert.equal(auditEvents.at(-1).lockDurationMinutes, 15);
+
+  const lockedAttempt = makeResponse();
+  await userLoginController({ body: { email: user.email, password } }, lockedAttempt);
+  assert.equal(lockedAttempt.statusCode, 401);
+  assert.deepEqual(lockedAttempt.body, { success: false, message: 'Invalid email or password.' });
+  assert.equal(user.failedLoginAttempts, 7);
+});
+
+test('an expired 15-minute lock clears its old counter and accepts a fresh attempt window', async (t) => {
+  const user = await makeUser({ failedLoginAttempts: 7, lockUntil: new Date(Date.now() - 1) });
+  stubLoginRecords(t, { user });
+  const res = makeResponse();
+  await userLoginController({ body: { email: user.email, password: 'WrongPassword1!' }, ip: '203.0.113.7' }, res);
+  assert.equal(res.statusCode, 401);
+  assert.deepEqual(res.body, { success: false, message: 'Invalid email or password.' });
+  assert.equal(user.failedLoginAttempts, 1);
+  assert.equal(user.lockUntil, null);
+});
+
+test('repeated lockouts escalate to 30 minutes then 60 minutes and cap at one hour', async (t) => {
+  const user = await makeUser();
+  const auditEvents = [];
+  stubLoginRecords(t, { user, auditEvents });
+
+  const lockAgain = async (expectedMinutes, expectedLockouts) => {
+    user.lockUntil = new Date(Date.now() - 1);
+    user.failedLoginAttempts = 7;
+    for (let attempt = 0; attempt < 7; attempt += 1) {
+      const res = makeResponse();
+      await userLoginController({ body: { email: user.email, password: 'WrongPassword1!' } }, res);
+      if (attempt === 6) {
+        assert.equal(res.statusCode, 401);
+        assert.equal(res.body.message, 'Invalid email or password.');
+      } else {
+        assert.equal(res.statusCode, 401);
+      }
+    }
+    assert.ok(user.lockUntil.getTime() - Date.now() <= expectedMinutes * 60 * 1000);
+    assert.ok(user.lockUntil.getTime() - Date.now() > (expectedMinutes - 1) * 60 * 1000);
+    assert.equal(user.consecutiveLockouts, expectedLockouts);
+  };
+
+  await lockAgain(15, 1);
+  await lockAgain(30, 2);
+  await lockAgain(60, 3);
+  await lockAgain(60, 4);
+  assert.deepEqual(
+    auditEvents.filter(({ event }) => event === 'ACCOUNT_LOCKED').map(({ lockDurationMinutes }) => lockDurationMinutes),
+    [15, 30, 60, 60],
+  );
+});
+
+test('successful authentication clears the failed-attempt and consecutive-lockout counters', async (t) => {
+  const user = await makeUser({ failedLoginAttempts: 4, consecutiveLockouts: 2 });
+  stubLoginRecords(t, { user });
+  stubMethod(t, Register, 'updateOne', async (_filter, update) => {
+    Object.assign(user, update.$set);
+    return { acknowledged: true, matchedCount: 1 };
+  });
+
+  const res = makeResponse();
+  await userLoginController({ body: { email: user.email, password } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(user.failedLoginAttempts, 0);
+  assert.equal(user.consecutiveLockouts, 0);
+  assert.equal(user.lockUntil, null);
+});
+
+test('concurrent bad logins cannot pass the seventh-attempt lock boundary', async (t) => {
+  const user = await makeUser();
+  stubLoginRecords(t, { user });
+  const responses = await Promise.all(Array.from({ length: 9 }, async () => {
+    const res = makeResponse();
+    await userLoginController({ body: { email: user.email, password: 'WrongPassword1!' } }, res);
+    return res;
+  }));
+  assert.equal(user.failedLoginAttempts, 7);
+  assert.ok(user.lockUntil > Date.now());
+  assert.equal(responses.filter((res) => res.statusCode === 401).length, 9);
+  assert.equal(responses.filter((res) => res.body.message !== 'Invalid email or password.').length, 0);
 });
 
 test('valid access tokens authenticate the current unsuspended account', async (t) => {

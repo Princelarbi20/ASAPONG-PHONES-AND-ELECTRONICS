@@ -59,7 +59,7 @@ const escapeHtml = (value) => String(value)
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#39;");
 
-const formatMoney = (value) => `$${Math.round(Number(value) || 0).toLocaleString("en-US")}`;
+const formatMoney = (value) => `GHS ${(Number(value) || 0).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const getItemImage = (item) => item.image || item.productId?.images?.[0] || "";
 
@@ -72,7 +72,12 @@ export const buildOrderStatusEmail = ({ order, previousStatus, newStatus }) => {
   }
 
   const customerName = order.user?.userName || "Valued Customer";
-  const orderId = order._id.toString();
+  const orderId = order.orderNumber || order._id.toString();
+  const address = order.shippingAddress || {};
+  const paymentDetails = order.paymentDetails || {};
+  const supportEmail = process.env.SUPPORT_EMAIL?.trim();
+  const supportPhone = process.env.SUPPORT_PHONE?.trim();
+  const supportText = [supportEmail, supportPhone].filter(Boolean).join(' | ');
   const items = order.items || [];
   const itemRows = items.map((item) => {
     const productName = item.name || item.productId?.name || "Product";
@@ -107,11 +112,15 @@ export const buildOrderStatusEmail = ({ order, previousStatus, newStatus }) => {
     `Previous status: ${previousStatus}`,
     `New status: ${newStatus}`,
     `Payment status: ${order.paymentStatus || "PENDING"}`,
+    `Payment method: ${order.paymentMethod || paymentDetails.provider || "Not specified"}`,
+    ...(paymentDetails.reference ? [`Payment reference: ${paymentDetails.reference}`] : []),
     "",
     "Order items:",
     textItems || "- No items listed",
     "",
     `Order total: ${formatMoney(order.totalPrice)}`,
+    `Delivery address: ${[address.address, address.city, address.state, address.postalCode, address.country].filter(Boolean).join(', ') || 'Not provided'}`,
+    ...(supportText ? [`Customer support: ${supportText}`] : []),
     "",
     "Thank you for shopping with us.",
   ].join("\n");
@@ -150,7 +159,7 @@ export const buildOrderStatusEmail = ({ order, previousStatus, newStatus }) => {
                     ${escapeHtml(template.subject)}
                   </span>
                   <p style="color: #6b7280; font-size: 12px; margin: 8px 0 0 0;">
-                    Order ID: <strong style="color: #111827;">${escapeHtml(orderId)}</strong>
+                    Order number: <strong style="color: #111827;">${escapeHtml(orderId)}</strong>
                   </p>
                 </div>
 
@@ -177,8 +186,18 @@ export const buildOrderStatusEmail = ({ order, previousStatus, newStatus }) => {
                 <p style="color: #111827; font-size: 14px; margin: 16px 0 0 0; text-align: right;">
                   <strong>Total: ${formatMoney(order.totalPrice)}</strong>
                 </p>
+                <p style="color: #4b5563; font-size: 12px; margin: 16px 0 0 0; text-align: left;">
+                  Payment method: <strong>${escapeHtml(order.paymentMethod || paymentDetails.provider || "Not specified")}</strong><br />
+                  Payment status: <strong>${escapeHtml(order.paymentStatus || "PENDING")}</strong>
+                  ${paymentDetails.reference ? `<br />Payment reference: <strong>${escapeHtml(paymentDetails.reference)}</strong>` : ""}
+                </p>
+                <p style="color: #4b5563; font-size: 12px; margin: 12px 0 0 0; text-align: left;">
+                  Delivery address: ${escapeHtml([address.address, address.city, address.state, address.postalCode, address.country].filter(Boolean).join(', ') || 'Not provided')}
+                </p>
               </td>
             </tr>
+
+            ${supportText ? `<tr><td style="padding:12px 20px; text-align:center; color:#6b7280; font-size:12px;">Customer support: ${escapeHtml(supportText)}</td></tr>` : ""}
 
             <tr>
               <td style="background-color: #f9fafb; padding: 16px 28px; text-align: center; border-top: 1px solid #f3f4f6;">

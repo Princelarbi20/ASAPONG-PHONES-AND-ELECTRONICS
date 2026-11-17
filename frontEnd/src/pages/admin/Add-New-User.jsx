@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import axiosInstance from '../../lib/axios';
 import { Eye, EyeOff } from 'lucide-react';
+import { isValidPassword } from '../../../../shared/passwordPolicy.js';
+import PasswordStrengthIndicator from '@/component/PasswordStrengthIndicator';
 
 // Get backend base URL from Vite environment variables with a fallback
 export const AddNewUser = () => {
@@ -23,6 +25,12 @@ export const AddNewUser = () => {
     e.preventDefault();
     setIsLoading(true);
     setErrorMsg('');
+
+    if (!isValidPassword(formData.password)) {
+      setErrorMsg('Password must be 8–128 characters and cannot be commonly used.');
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const response = await axiosInstance.post('/add-new-admin', formData);
@@ -131,8 +139,7 @@ export const AddNewUser = () => {
                 autoComplete="new-password"
                 required
                 minLength={8}
-                maxLength={128}
-                pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,128}"
+                maxLength={256}
                 className="block w-full rounded-md border border-gray-300 px-3 py-2.5 pr-12 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm bg-gray-50/50 focus:bg-white transition-all"
                 placeholder="••••••••"
                 value={formData.password}
@@ -182,6 +189,7 @@ export const AddNewUser = () => {
               )}
             </button>
           </div>
+              <PasswordStrengthIndicator password={formData.password} />
         </form>
         
       </div>

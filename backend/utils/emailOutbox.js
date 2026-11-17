@@ -8,7 +8,8 @@ import {
 
 import { EmailOutbox } from '../modules/emailOutbox.js';
 import { Register } from '../modules/userRegister.js';
-import sendEmail from './nodemailer.js';
+import { PasswordResetOTP } from '../modules/passwordResetOTP.js';
+import sendEmail from './emailTransport.js';
 
 const MAX_ATTEMPTS = 5;
 
@@ -92,8 +93,19 @@ export const enqueueOtpEmail = async ({
   });
 };
 
+export const enqueuePasswordResetEmail = async ({ requestId, userId, otpHash, message }) => {
+  return EmailOutbox.create({
+    requestId,
+    kind: 'password_reset',
+    priority: 10,
+    userId,
+    otpVersion: otpHash,
+    encryptedPayload: encryptPayload(message),
+  });
+};
+
 // Process pending OTP emails.
-export const processEmailOutbox = async () => {
+export const processEmailOutbox = async ({ send = sendEmail } = {}) => {
   if (processing) return;
 
   processing = true;
@@ -133,7 +145,7 @@ export const processEmailOutbox = async () => {
       },
       {
         returnDocument: 'after',
-        sort: { createdAt: 1 },
+        sort: { priority: -1, createdAt: 1 },
       }
     ).select('+encryptedPayload');
 
@@ -143,13 +155,23 @@ export const processEmailOutbox = async () => {
     const user = await Register.findById(job.userId)
       .select('+otpVersion');
 
-    if (
-      !user ||
-      user.isVerified ||
-      user.otpVersion !== job.otpVersion ||
-      !user.otpExpires ||
-      user.otpExpires <= new Date()
-    ) {
+    let isCurrentRequest = Boolean(user && !user.isSuspended);
+    if (job.kind === 'password_reset') {
+      isCurrentRequest = Boolean(isCurrentRequest && user.isVerified);
+    } else {
+      isCurrentRequest = Boolean(isCurrentRequest && !user.isVerified);
+    }
+    if (isCurrentRequest && job.kind === 'password_reset') {
+      const resetRecord = await PasswordResetOTP.findOne({ userId: job.userId }).select('+otpHash');
+      isCurrentRequest = Boolean(
+        resetRecord?.otpHash === job.otpVersion &&
+        resetRecord.otpExpiresAt && resetRecord.otpExpiresAt > new Date()
+      );
+    } else if (isCurrentRequest) {
+      isCurrentRequest = Boolean(user.otpVersion === job.otpVersion && user.otpExpires && user.otpExpires > new Date());
+    }
+
+    if (!isCurrentRequest) {
       await EmailOutbox.updateOne(
         { _id: job._id },
         {
@@ -170,9 +192,12 @@ export const processEmailOutbox = async () => {
     // Attempt email delivery.
     const deliveryStartedAt = Date.now();
 
-    const result = await sendEmail(
-      decryptPayload(job.encryptedPayload)
-    );
+    const message = decryptPayload(job.encryptedPayload);
+    const stableMessageId = `<${Buffer.from(String(job.requestId || job._id)).toString('hex')}@asapong-phones.local>`;
+    const result = await send({
+      ...message,
+      headers: { ...(message.headers || {}), 'Message-ID': stableMessageId },
+    });
 
     // Handle unsuccessful delivery.
     if (!result?.success) {
@@ -269,5 +294,9 @@ export const startEmailOutboxWorker = () => {
 
   timer.unref?.();
 
+  void processEmailOutbox();
+};
+
+export const wakeEmailOutboxWorker = () => {
   void processEmailOutbox();
 };

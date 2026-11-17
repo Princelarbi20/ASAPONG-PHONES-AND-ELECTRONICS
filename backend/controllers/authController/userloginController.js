@@ -1,39 +1,120 @@
-import bcrypt from "bcrypt";
 import { Register } from "../../modules/userRegister.js";
 import { ShopRequest } from "../../modules/shopRequestSchema.js";
+import { AuthAuditLog } from '../../modules/authAuditLog.js';
 import { issueAuthTokens } from "../../utils/issueAuthTokens.js";
-
-const verifyPassword = async (password, passwordHash) => {
-    if (typeof passwordHash !== "string" || !passwordHash.startsWith("$2")) return false;
-
-    try {
-        return await bcrypt.compare(password, passwordHash);
-    } catch {
-        // A malformed or legacy hash should be treated as a failed login, not a server error.
-        return false;
-    }
-};
+import { hashPassword, isLegacyPasswordHash, verifyPassword } from '../../utils/passwordHash.js';
 
 const isTemporarilyLocked = (account) =>
-    (account.failedLoginAttempts || 0) >= 3 && account.lockUntil && account.lockUntil > Date.now();
+    Boolean(account.lockUntil && account.lockUntil > Date.now());
+
+const MAX_FAILED_LOGIN_ATTEMPTS = 7;
+const LOCKOUT_MINUTES = [15, 30, 60];
 
 const recordFailedLogin = async (model, accountId) => {
     const now = new Date();
-    const result = await model.updateOne(
+    const currentAttempts = { $ifNull: ['$failedLoginAttempts', 0] };
+    const lockExpired = {
+        $and: [
+            { $ne: [{ $ifNull: ['$lockUntil', null] }, null] },
+            { $lte: ['$lockUntil', now] },
+        ],
+    };
+    const nextAttempts = {
+        $add: [{ $cond: [lockExpired, 0, currentAttempts] }, 1],
+    };
+    const currentLockouts = { $ifNull: ['$consecutiveLockouts', 0] };
+    const isLockingAccount = { $gte: [nextAttempts, MAX_FAILED_LOGIN_ATTEMPTS] };
+    const nextLockouts = { $add: [currentLockouts, 1] };
+    const nextLockDurationMinutes = {
+        $switch: {
+            branches: [
+                { case: { $eq: [nextLockouts, 1] }, then: LOCKOUT_MINUTES[0] },
+                { case: { $eq: [nextLockouts, 2] }, then: LOCKOUT_MINUTES[1] },
+            ],
+            default: LOCKOUT_MINUTES[2],
+        },
+    };
+    const account = await model.findOneAndUpdate(
         {
             _id: accountId,
-            $or: [
-                { failedLoginAttempts: { $lt: 3 } },
-                { lockUntil: { $lte: now } },
-                { lockUntil: null },
+            $and: [
+                { $or: [{ lockUntil: null }, { lockUntil: { $lte: now } }] },
+                {
+                    $or: [
+                        { lockUntil: { $lte: now } },
+                        { failedLoginAttempts: { $lt: MAX_FAILED_LOGIN_ATTEMPTS } },
+                        { failedLoginAttempts: null },
+                    ],
+                },
             ],
         },
-        {
-            $inc: { failedLoginAttempts: 1 },
-            $set: { lockUntil: new Date(now.getTime() + 50 * 60 * 1000) },
-        }
+        [{ $set: {
+            failedLoginAttempts: nextAttempts,
+            consecutiveLockouts: {
+                $cond: [isLockingAccount, nextLockouts, currentLockouts],
+            },
+            lockUntil: {
+                $cond: [
+                    isLockingAccount,
+                    { $dateAdd: { startDate: '$$NOW', unit: 'minute', amount: nextLockDurationMinutes } },
+                    { $cond: [lockExpired, null, '$lockUntil'] },
+                ],
+            },
+        } }],
+        { returnDocument: 'after', projection: { failedLoginAttempts: 1, consecutiveLockouts: 1, lockUntil: 1 } },
     );
-    return result.modifiedCount === 1;
+    return account || null;
+};
+
+const writeLoginAudit = async (req, { account, accountType, event, remainingAttempts = null } = {}) => {
+    try {
+        await AuthAuditLog.create({
+            accountId: account?._id || null,
+            accountType,
+            event,
+            ipAddress: req.ip || req.socket?.remoteAddress || null,
+            failedLoginAttempts: Number.isInteger(account?.failedLoginAttempts) ? account.failedLoginAttempts : null,
+            consecutiveLockouts: Number.isInteger(account?.consecutiveLockouts) ? account.consecutiveLockouts : null,
+            remainingAttempts,
+            lockUntil: account?.lockUntil || null,
+            lockDurationMinutes: account?.lockUntil && account.lockUntil > Date.now()
+                ? Math.ceil((account.lockUntil.getTime() - Date.now()) / 60000)
+                : null,
+            requestId: req.id || null,
+        });
+    } catch (error) {
+        console.error('[auth-audit] write_failed', JSON.stringify({ requestId: req.id, errorCode: error?.code || error?.name || 'audit_write_failed' }));
+    }
+};
+
+const resetLoginState = async (model, account, passwordHash) => {
+    const update = { $set: { failedLoginAttempts: 0, consecutiveLockouts: 0, lockUntil: null } };
+    if (passwordHash) update.$set.password = passwordHash;
+    const result = await model.updateOne(
+        { _id: account._id, $or: [{ lockUntil: null }, { lockUntil: { $lte: new Date() } }] },
+        update,
+    );
+    return result.matchedCount !== 0;
+};
+
+const failedLoginResponse = async (res, account, accountType, req) => {
+    const remainingAttempts = Math.max(0, MAX_FAILED_LOGIN_ATTEMPTS - account.failedLoginAttempts);
+    const locked = remainingAttempts === 0;
+    await writeLoginAudit(req, {
+        account,
+        accountType,
+        event: locked ? 'ACCOUNT_LOCKED' : 'LOGIN_FAILED',
+        remainingAttempts,
+    });
+    // Keep the public response identical for unknown, incorrect, and locked accounts.
+    // The UI tracks attempts within the current login session; account-specific counts
+    // and lock durations remain private in MongoDB and the audit log.
+    return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+};
+
+const lockedLoginResponse = async (req, res, account, accountType) => {
+    await writeLoginAudit(req, { account, accountType, event: 'LOGIN_BLOCKED' });
+    return res.status(401).json({ success: false, message: 'Invalid email or password.' });
 };
 
 export const userLoginController = async (req, res) => {
@@ -57,12 +138,7 @@ export const userLoginController = async (req, res) => {
 
         if (regularUser) {
             // Check Lockout Status FIRST (Saves CPU time)
-            if (isTemporarilyLocked(regularUser)) {
-                return res.status(403).json({
-                    success: false,
-                    message: "Account is temporarily locked. Try again later."
-                });
-            }
+            if (isTemporarilyLocked(regularUser)) return await lockedLoginResponse(req, res, regularUser, 'USER');
 
             // Check Suspension Status
             if (regularUser.isSuspended) {
@@ -77,18 +153,8 @@ export const userLoginController = async (req, res) => {
 
             if (!isMatch) {
                 const updatedUser = await recordFailedLogin(Register, regularUser._id);
-
-                if (!updatedUser) {
-                    return res.status(403).json({
-                        success: false,
-                        message: "Account is temporarily locked. Try again later."
-                    });
-                }
-
-                return res.status(401).json({
-                    success: false,
-                    message: "Invalid email or password."
-                });
+                if (!updatedUser) return await lockedLoginResponse(req, res, regularUser, 'USER');
+                return await failedLoginResponse(res, updatedUser, 'USER', req);
             }
 
             // 🚨 NEW CHECK: Prevent unverified users from logging in
@@ -101,13 +167,8 @@ export const userLoginController = async (req, res) => {
                 });
             }
 
-            // Reset failed login tracking on successful login
-            if (regularUser.failedLoginAttempts > 0 || regularUser.lockUntil) {
-                await Register.updateOne(
-                    { _id: regularUser._id },
-                    { $set: { failedLoginAttempts: 0, lockUntil: null } }
-                );
-            }
+            const upgradedHash = isLegacyPasswordHash(regularUser.password) ? await hashPassword(password) : null;
+            if (!await resetLoginState(Register, regularUser, upgradedHash)) return await lockedLoginResponse(req, res, regularUser, 'USER');
 
             // Generate Tokens
             // accountType identifies the backing account model. Admins created
@@ -138,34 +199,14 @@ export const userLoginController = async (req, res) => {
         const shopUser = await ShopRequest.findOne({ email: searchEmail }).select('+password');
 
         if (shopUser) {
-            if (isTemporarilyLocked(shopUser)) {
-                return res.status(403).json({
-                    success: false,
-                    message: "Account is temporarily locked. Try again later."
-                });
-            }
+            if (isTemporarilyLocked(shopUser)) return await lockedLoginResponse(req, res, shopUser, 'DEALER');
 
             const isMatch = await verifyPassword(password, shopUser.password);
 
             if (!isMatch) {
                 const updatedShop = await recordFailedLogin(ShopRequest, shopUser._id);
-                if (!updatedShop) {
-                    return res.status(403).json({
-                        success: false,
-                        message: "Account is temporarily locked. Try again later."
-                    });
-                }
-                return res.status(401).json({
-                    success: false,
-                    message: "Invalid email or password."
-                });
-            }
-
-            if (shopUser.failedLoginAttempts > 0 || shopUser.lockUntil) {
-                await ShopRequest.updateOne(
-                    { _id: shopUser._id },
-                    { $set: { failedLoginAttempts: 0, lockUntil: null } }
-                );
+                if (!updatedShop) return await lockedLoginResponse(req, res, shopUser, 'DEALER');
+                return await failedLoginResponse(res, updatedShop, 'DEALER', req);
             }
 
             if (shopUser.status === "PENDING") {
@@ -181,6 +222,9 @@ export const userLoginController = async (req, res) => {
                     message: "Your dealer request has been rejected."
                 });
             }
+
+            const upgradedHash = isLegacyPasswordHash(shopUser.password) ? await hashPassword(password) : null;
+            if (!await resetLoginState(ShopRequest, shopUser, upgradedHash)) return await lockedLoginResponse(req, res, shopUser, 'DEALER');
 
             issueAuthTokens(res, shopUser, "DEALER");
 
@@ -205,13 +249,14 @@ export const userLoginController = async (req, res) => {
         // ==========================================
         // 3. NO ACCOUNT FOUND
         // ==========================================
+        await writeLoginAudit(req, { accountType: 'UNKNOWN', event: 'LOGIN_FAILED' });
         return res.status(401).json({
             success: false,
             message: "Invalid email or password."
         });
 
     } catch (error) {
-        console.error("Login Error:", error);
+        console.error('[auth-login] failed', JSON.stringify({ requestId: req.id, errorCode: error?.code || error?.name || 'login_failed' }));
         return res.status(500).json({
             success: false,
             message: "Internal server error."

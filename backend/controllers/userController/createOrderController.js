@@ -2,9 +2,9 @@ import mongoose from 'mongoose';
 import { Product } from '../../modules/productSchema.js';
 import { Orders } from '../../modules/orderSchema.js';
 import { Counter } from '../../modules/counterSchema.js';
-import { sendCashOnDeliveryOrderEmail } from '../../utils/orderEmail.js';
 import { CACHE_NAMESPACES, invalidateCacheNamespaces } from '../../utils/responseCache.js';
 import { UNPAID_ORDER_EXPIRY_MS } from '../../config/orderLifecycle.js';
+import { enqueueOrderNotification } from '../../utils/orderNotificationOutbox.js';
 
 const fail = (statusCode, message) => {
   const error = new Error(message);
@@ -152,15 +152,18 @@ export const createOrderController = async (req, res, next) => {
 
     const order = await populateOrder(orderId);
 
-    let emailSent = null;
+    let emailQueued = null;
     if (!reusedExisting && paymentMethod === 'COD') {
       try {
-        const emailResult = await sendCashOnDeliveryOrderEmail(orderId);
-        emailSent = Boolean(emailResult?.success);
-        if (!emailSent) console.error('Cash-on-delivery order email was not sent:', emailResult?.error || 'Unknown mailer error');
-      } catch (emailError) {
-        emailSent = false;
-        console.error('Failed to send cash-on-delivery order email:', emailError);
+        await enqueueOrderNotification({
+          orderId,
+          eventKey: `order:${orderId}:cod-confirmation`,
+          type: 'COD_CONFIRMATION',
+        });
+        emailQueued = true;
+      } catch (error) {
+        emailQueued = false;
+        console.error('[order-email] enqueue_failed', JSON.stringify({ orderId: String(orderId), errorCode: error?.code || error?.name }));
       }
     }
 
@@ -169,7 +172,8 @@ export const createOrderController = async (req, res, next) => {
       message: reusedExisting
         ? 'Existing unpaid order returned. Proceed to payment.'
         : paymentMethod === 'COD' ? 'Order placed with Cash on Delivery.' : 'Order created. Proceed to payment.',
-      emailSent,
+      emailSent: null,
+      emailQueued,
       order,
     });
   } catch (error) {

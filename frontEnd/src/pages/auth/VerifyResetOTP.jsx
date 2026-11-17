@@ -11,8 +11,8 @@ const RESEND_SECONDS = 60;
 export default function VerifyResetOTP() {
   const location = useLocation();
   const navigate = useNavigate();
-  const email = location.state?.email;
-  const flowId = location.state?.flowId;
+  const [email, setEmail] = useState(location.state?.email || '');
+  const [flowId] = useState(() => location.state?.flowId || new URLSearchParams(window.location.hash.slice(1)).get('flowId') || '');
   const confirmationMessage = location.state?.confirmationMessage;
   const [code, setCode] = useState(Array(CODE_LENGTH).fill(''));
   const [expiryTime, setExpiryTime] = useState(() => Date.now() + EXPIRY_MS);
@@ -21,11 +21,17 @@ export default function VerifyResetOTP() {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
+  const [verificationState, setVerificationState] = useState('idle');
   const refs = useRef([]);
 
   useEffect(() => {
-    if (!email || !flowId) navigate('/auth/forgot-password', { replace: true });
-  }, [email, flowId, navigate]);
+    if (window.location.hash.includes('flowId=')) {
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}`);
+    }
+  }, []);
+  useEffect(() => {
+    if (!flowId) navigate('/auth/forgot-password', { replace: true });
+  }, [flowId, navigate]);
   useEffect(() => {
     const timer = window.setInterval(() => setRemaining(Math.max(0, expiryTime - Date.now())), 1000);
     return () => window.clearInterval(timer);
@@ -61,12 +67,15 @@ export default function VerifyResetOTP() {
   const submit = async (event) => {
     event.preventDefault();
     const otp = code.join('');
+    if (!email.trim()) { setError('Enter the email address associated with this reset request.'); return; }
     if (otp.length !== CODE_LENGTH) { setError('Enter all six digits.'); return; }
     if (!remaining) { setError('This code has expired. Request a new code.'); return; }
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setVerificationState('loading');
     try {
       const config = await withCsrf({ withCredentials: true });
-      const response = await axiosInstance.post('/verify-reset-otp', { email, flowId, otp }, config);
+      const response = await axiosInstance.post('/verify-reset-otp', { email: email.trim().toLowerCase(), flowId, otp }, config);
+      setVerificationState('success');
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
       navigate('/auth/reset-password', {
         replace: true,
         state: {
@@ -76,6 +85,7 @@ export default function VerifyResetOTP() {
         },
       });
     } catch (requestError) {
+      setVerificationState('error');
       setError(requestError.response?.data?.message || 'Could not verify this code. Please try again.');
     } finally { setLoading(false); }
   };
@@ -85,7 +95,7 @@ export default function VerifyResetOTP() {
     setResending(true); setError('');
     try {
       const config = await withCsrf({ withCredentials: true });
-      await axiosInstance.post('/resend-reset-otp', { email, flowId }, config);
+      await axiosInstance.post('/resend-reset-otp', { email: email.trim().toLowerCase(), flowId }, config);
       setCode(Array(CODE_LENGTH).fill(''));
       setExpiryTime(Date.now() + EXPIRY_MS);
       setRemaining(EXPIRY_MS);
@@ -102,14 +112,18 @@ export default function VerifyResetOTP() {
   const formattedTime = `${String(Math.floor(remaining / 60000)).padStart(2, '0')}:${String(Math.floor((remaining % 60000) / 1000)).padStart(2, '0')}`;
 
   return (
-    <div className="h-[100dvh] w-full overflow-y-auto overscroll-contain bg-transparent">
+    <div className="min-h-full w-full overflow-y-auto overscroll-contain bg-transparent">
       <style>{`
         @keyframes orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes counter-rotate { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
         .animate-orbit { animation: orbit 15s linear infinite; }
         .animate-counter-rotate { animation: counter-rotate 15s linear infinite; }
+        @keyframes reset-appear { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes reset-pop { 0% { opacity: 0; transform: scale(.65); } 75% { transform: scale(1.08); } 100% { opacity: 1; transform: scale(1); } }
+        .reset-appear { animation: reset-appear 420ms ease-out both; }
+        .reset-pop { animation: reset-pop 360ms ease-out both; }
         @media (prefers-reduced-motion: reduce) {
-          .animate-orbit, .animate-counter-rotate { animation: none; }
+          .animate-orbit, .animate-counter-rotate, .reset-appear, .reset-pop { animation: none; }
         }
       `}</style>
 
@@ -119,7 +133,7 @@ export default function VerifyResetOTP() {
           {/* Illustration: sized by screen height, hidden on very short screens */}
           <div
             aria-hidden="true"
-            className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-purple-50/50 sm:h-36 sm:w-36 [@media(min-height:820px)]:h-48 [@media(min-height:820px)]:w-48 [@media(max-height:620px)]:hidden"
+            className="reset-appear relative flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-purple-50/50 sm:h-32 sm:w-32 lg:h-36 lg:w-36"
           >
             <div className="absolute inset-2 rounded-full border border-purple-100/80" />
             <div className="absolute inset-4 rounded-full border border-purple-100/50" />
@@ -161,8 +175,7 @@ export default function VerifyResetOTP() {
               Verify your email
             </h1>
             <p className="text-xs text-gray-500 sm:text-sm">
-              If an account is eligible, a six-digit code will be sent to{' '}
-              <span className="break-all font-semibold">{email}</span>
+              Enter the email address and six-digit code from the reset message.
             </p>
             {confirmationMessage && (
               <p role="status" className="pt-1 text-xs text-indigo-700 sm:text-sm">
@@ -173,6 +186,12 @@ export default function VerifyResetOTP() {
 
           {/* OTP form */}
           <form onSubmit={submit} className="w-full space-y-3 sm:space-y-4" noValidate>
+            {!email && (
+              <label htmlFor="reset-verification-email" className="block space-y-1 text-sm font-medium text-gray-700">
+                Email address
+                <input id="reset-verification-email" type="email" autoComplete="email" inputMode="email" value={email} onChange={(event) => setEmail(event.target.value)} disabled={isBusy} className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+              </label>
+            )}
             <div
               className="flex items-center justify-center gap-1.5 sm:gap-3"
               onPaste={(event) => { event.preventDefault(); setDigits(event.clipboardData.getData('text')); }}
@@ -217,15 +236,22 @@ export default function VerifyResetOTP() {
                 {isExpired ? 'Code expired. Request a new code below.' : `Code expires in ${formattedTime}`}
               </p>
               {error && (
-                <p id="otp-error" className="text-center text-xs text-red-600 sm:text-sm" role="alert">
+                <p id="otp-error" className="reset-pop text-center text-xs text-red-600 sm:text-sm" role="alert">
                   {error}
                 </p>
               )}
             </div>
 
+            {verificationState === 'loading' && (
+              <p role="status" className="flex items-center justify-center gap-2 text-sm text-indigo-700"><LoaderCircle size={18} className="animate-spin motion-reduce:animate-none" /> Verifying your code…</p>
+            )}
+            {verificationState === 'success' && (
+              <p role="status" className="reset-pop flex items-center justify-center gap-2 text-sm font-semibold text-emerald-700"><span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100">✓</span> Code verified. Continue to choose a new password…</p>
+            )}
+
             <button
               type="submit"
-              disabled={isBusy || isExpired || !isComplete}
+              disabled={isBusy || isExpired || !isComplete || !email.trim()}
               className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold uppercase tracking-wider shadow-sm transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed ${
                 isComplete && !isBusy && !isExpired
                   ? 'bg-green-300 text-gray-900 hover:bg-green-400 active:bg-green-500'

@@ -4,8 +4,8 @@ import { ArrowLeft, Eye, EyeOff, LoaderCircle, LockKeyhole } from 'lucide-react'
 import axiosInstance from '../../lib/axios';
 import { withCsrf } from '../../lib/csrf';
 import ShopName from '@/component/ShopName';
-
-const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/;
+import { isValidPassword } from '../../../../shared/passwordPolicy.js';
+import PasswordStrengthIndicator from '@/component/PasswordStrengthIndicator';
 
 export default function CreateNewPassword() {
   const { state } = useLocation();
@@ -44,7 +44,7 @@ export default function CreateNewPassword() {
 
   const submit = async (event) => {
     event.preventDefault();
-    if (!passwordPattern.test(password)) { setError('Use at least 8 characters with uppercase, lowercase, a number, and a symbol.'); return; }
+    if (!isValidPassword(password)) { setError('Use 8–128 characters and avoid commonly used passwords.'); return; }
     if (password !== confirmation) { setError('The passwords do not match.'); return; }
     setLoading(true); setError('');
     try {
@@ -85,7 +85,7 @@ export default function CreateNewPassword() {
                     autoCapitalize="none"
                     spellCheck={false}
                     required
-                    maxLength={128}
+                    maxLength={256}
                     value={value}
                     disabled={loading}
                     aria-invalid={Boolean(error)}
@@ -104,12 +104,13 @@ export default function CreateNewPassword() {
                     {visiblePasswords[visibilityKey] ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+                {visibilityKey === 'password' && <PasswordStrengthIndicator password={password} />}
               </div>
             ))}
 
             <div className="rounded-lg border border-slate-200/60 bg-white/50 p-3 text-xs leading-5 text-gray-600">
               <p className="font-semibold text-gray-700">Password requirements</p>
-              <p>At least 8 characters, including uppercase and lowercase letters, a number, and a symbol.</p>
+              <p>Use 8–128 characters. Passphrases and spaces are allowed; avoid common passwords.</p>
             </div>
 
             {error && (

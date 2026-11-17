@@ -1,9 +1,9 @@
 import { Register } from "../../modules/userRegister.js";
-import bcrypt from "bcrypt";
+import { hashPassword, verifyPassword } from '../../utils/passwordHash.js';
 import { isValidPassword } from "../../middleware/requestValidation.js";
 import { clearAuthCookies } from '../../utils/authCookies.js';
 import { PasswordResetOTP } from '../../modules/passwordResetOTP.js';
-import sendEmail from '../../utils/nodemailer.js';
+import sendEmail from '../../utils/emailTransport.js';
 import { escapeHtml } from '../../utils/escapeHtml.js';
 import { getPasswordChangedEmail, hashResetSecret } from '../../utils/passwordReset.js';
 
@@ -22,7 +22,7 @@ export const resetPasswordController = async (req, res) => {
         if (!isValidPassword(newPassword)) {
             return res.status(400).json({
                 success: false,
-                message: "New password must be at least 8 characters and include uppercase, lowercase, number, and symbol."
+                message: "Password must be 8–128 characters and cannot be commonly used."
             });
         }
 
@@ -35,7 +35,7 @@ export const resetPasswordController = async (req, res) => {
             });
         }
 
-        const currentPasswordMatches = await bcrypt.compare(currentPassword, user.password);
+        const currentPasswordMatches = await verifyPassword(currentPassword, user.password);
         if (!currentPasswordMatches) {
             return res.status(401).json({ success: false, message: "Current password is incorrect." });
         }
@@ -45,8 +45,7 @@ export const resetPasswordController = async (req, res) => {
         }
 
         // 3. Hash the new password securely
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(newPassword, salt);
+        user.password = await hashPassword(newPassword, 10);
         user.tokenVersion = (user.tokenVersion || 0) + 1;
 
         // 4. Clear out the reset token fields so they can't reuse the link
@@ -73,12 +72,12 @@ export const completeForgotPasswordResetController = async (req, res) => {
     try {
         const { email, resetAuthorization, newPassword } = req.body;
         if (!isValidPassword(newPassword)) {
-            return res.status(400).json({ success: false, message: 'Password must be at least 8 characters and include uppercase, lowercase, number, and symbol.' });
+            return res.status(400).json({ success: false, message: 'Password must be 8–128 characters and cannot be commonly used.' });
         }
 
         const user = await Register.findOne({ email: email.toLowerCase().trim(), isVerified: true, isSuspended: false }).select('+password');
         if (!user) return res.status(400).json({ success: false, message: 'The reset session is invalid or expired. Please start again.' });
-        if (await bcrypt.compare(newPassword, user.password)) {
+        if (await verifyPassword(newPassword, user.password)) {
             return res.status(400).json({ success: false, message: 'Choose a new password different from your current password.' });
         }
         const record = await PasswordResetOTP.findOneAndUpdate(
@@ -88,7 +87,7 @@ export const completeForgotPasswordResetController = async (req, res) => {
         );
         if (!record) return res.status(400).json({ success: false, message: 'The reset session is invalid or expired. Please start again.' });
 
-        user.password = await bcrypt.hash(newPassword, 10);
+        user.password = await hashPassword(newPassword, 10);
         user.tokenVersion = (user.tokenVersion || 0) + 1;
         await user.save();
         await PasswordResetOTP.deleteOne({ userId: user._id });

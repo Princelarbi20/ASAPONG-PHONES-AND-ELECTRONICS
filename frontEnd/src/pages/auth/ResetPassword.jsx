@@ -6,6 +6,8 @@ import { withCsrf } from '../../lib/csrf';
 import { useDispatch } from 'react-redux';
 import { authAction } from '../../redux/store';
 import { Eye, EyeOff } from 'lucide-react';
+import { isValidPassword } from '../../../../shared/passwordPolicy.js';
+import PasswordStrengthIndicator from '@/component/PasswordStrengthIndicator';
 
 
 const ResetPassword = () => {
@@ -18,16 +20,13 @@ const ResetPassword = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // Regex matching backend validation requirements
-  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,128}$/;
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     const nextErrors = {};
     if (!currentPassword.trim()) nextErrors.currentPassword = 'Current password is required.';
     if (!newPassword) nextErrors.newPassword = 'New password is required.';
-    else if (!passwordRegex.test(newPassword)) nextErrors.newPassword = 'Use at least 8 characters with upper and lowercase letters, a number, and a symbol.';
+    else if (!isValidPassword(newPassword)) nextErrors.newPassword = 'Use 8–128 characters and avoid commonly used passwords.';
     if (!confirmPassword) nextErrors.confirmPassword = 'Please confirm your new password.';
     else if (newPassword !== confirmPassword) nextErrors.confirmPassword = 'Passwords do not match.';
     if (currentPassword && newPassword && currentPassword === newPassword) nextErrors.newPassword = 'Choose a password different from your current one.';
@@ -90,7 +89,7 @@ const ResetPassword = () => {
               type={visiblePasswords.current ? 'text' : 'password'}
               autoComplete="current-password"
               required
-              maxLength={128}
+              maxLength={256}
               aria-invalid={Boolean(formErrors.currentPassword)}
               onBlur={() => { if (!currentPassword.trim()) setFormErrors((errors) => ({ ...errors, currentPassword: 'Current password is required.' })); }}
               value={currentPassword}
@@ -114,9 +113,9 @@ const ResetPassword = () => {
               autoComplete="new-password"
               required
               minLength={8}
-              maxLength={128}
+              maxLength={256}
               aria-invalid={Boolean(formErrors.newPassword)}
-              onBlur={() => { if (newPassword && !passwordRegex.test(newPassword)) setFormErrors((errors) => ({ ...errors, newPassword: 'Password does not meet the requirements.' })); }}
+              onBlur={() => { if (newPassword && !isValidPassword(newPassword)) setFormErrors((errors) => ({ ...errors, newPassword: 'Use 8–128 characters and avoid commonly used passwords.' })); }}
               value={newPassword}
               onChange={(e) => { setNewPassword(e.target.value); setFormErrors((errors) => ({ ...errors, newPassword: '' })); }}
               disabled={isLoading}
@@ -126,8 +125,9 @@ const ResetPassword = () => {
             <button type="button" onClick={() => setVisiblePasswords((state) => ({ ...state, new: !state.new }))} aria-label={visiblePasswords.new ? 'Hide new password' : 'Show new password'} aria-pressed={visiblePasswords.new} className="absolute inset-y-0 right-0 flex items-center justify-center px-3 text-slate-500 hover:text-indigo-600">{visiblePasswords.new ? <EyeOff size={18} /> : <Eye size={18} />}</button>
             </div>
             {formErrors.newPassword && <p className="mt-1 text-xs text-red-600">{formErrors.newPassword}</p>}
+            <PasswordStrengthIndicator password={newPassword} />
             <p className="text-[10px] text-gray-500 mt-1">
-              Use 8–128 characters with uppercase, lowercase, a number, and a symbol.
+              Use 8–128 characters. Spaces and passphrases are allowed.
             </p>
           </div>
 
@@ -140,7 +140,7 @@ const ResetPassword = () => {
               type={visiblePasswords.confirm ? 'text' : 'password'}
               autoComplete="new-password"
               required
-              maxLength={128}
+              maxLength={256}
               aria-invalid={Boolean(formErrors.confirmPassword)}
               value={confirmPassword}
               onChange={(e) => { setConfirmPassword(e.target.value); setFormErrors((errors) => ({ ...errors, confirmPassword: '' })); }}

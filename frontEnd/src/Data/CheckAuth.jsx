@@ -34,12 +34,17 @@ const CheckAuth = ({
 
   // Authentication routes
   const isAuthRoute = path.startsWith('/auth');
+  const isPasswordRecoveryRoute = [
+    '/auth/forgot-password',
+    '/auth/verify-reset-otp',
+    '/auth/reset-password',
+  ].includes(path);
 
   const requiresSessionCheck =
     isCustomerProtectedRoute ||
     isAdminRoute ||
     isDealerRoute ||
-    isAuthRoute;
+    (isAuthRoute && !isPasswordRecoveryRoute);
 
   // Wait for session restoration only on routes
   // that need an authentication decision.
@@ -135,7 +140,7 @@ const CheckAuth = ({
   }
 
   // Redirect authenticated users away from login/register pages.
-  if (isAuthRoute && isAuthenticated) {
+  if (isAuthRoute && !isPasswordRecoveryRoute && isAuthenticated) {
     if (userRole === 'ADMIN') {
       return <Navigate to="/admin" replace />;
     }

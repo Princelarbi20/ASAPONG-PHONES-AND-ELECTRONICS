@@ -1,6 +1,7 @@
 import { Register } from "../../modules/userRegister.js";
-import bcrypt from 'bcrypt';
 import { CACHE_NAMESPACES, invalidateCacheNamespace } from "../../utils/responseCache.js";
+import { hashPassword } from '../../utils/passwordHash.js';
+import { isValidPassword } from '../../../shared/passwordPolicy.js';
 
 export const addnewAdmin = async (req, res) => {
   try {
@@ -13,6 +14,7 @@ export const addnewAdmin = async (req, res) => {
         message: "All registration fields are required" // Fixed typo: massage -> message
       });
     }
+    if (!isValidPassword(password)) return res.status(400).json({ success: false, message: 'Password must be 8–128 characters and cannot be a commonly used password.' });
 
     // 2. Check if user already exists (Added missing 'await')
     const normalizedEmail = email.trim().toLowerCase();
@@ -27,7 +29,7 @@ export const addnewAdmin = async (req, res) => {
     }
 
     // 3. Hash the password safely (Added missing 'await')
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashPassword(password, 10);
 
     // 4. Create the new Admin record in MongoDB (Added missing 'await')
     // Model.create automatically saves the document, no need for .save()

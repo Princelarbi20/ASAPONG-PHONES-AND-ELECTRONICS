@@ -3,8 +3,11 @@
 import React, { useRef, useState } from 'react';
 import { Input } from "@base-ui/react/input";
 import { Eye, EyeOff } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { isValidPassword } from '../../../../shared/passwordPolicy.js';
+import PasswordStrengthIndicator from '@/component/PasswordStrengthIndicator';
 
-export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit, buttonText = "Submit" }) => {
+export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit, buttonText = "Submit", failedLoginAttempts = 0 }) => {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
@@ -15,12 +18,14 @@ export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit,
     const nextErrors = {};
     for (const field of formControl.filter((item) => !onlyField || item.name === onlyField)) {
       const value = formData[field.name];
-      const text = typeof value === 'string' ? value.trim() : '';
-      if (!text) nextErrors[field.name] = 'This field is required.';
+      const isPassword = field.name === 'password';
+      const text = typeof value === 'string' ? (isPassword ? value : value.trim()) : '';
+      if (isPassword && !text.length) nextErrors[field.name] = 'This field is required.';
+      else if (!isPassword && !text) nextErrors[field.name] = 'This field is required.';
       else if (field.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)) nextErrors[field.name] = 'Enter a valid email address.';
       else if (field.name === 'userName' && (text.length < 2 || text.length > 80 || !/^[\p{L}\p{M}][\p{L}\p{M} .'-]*$/u.test(text))) nextErrors[field.name] = 'Enter a valid name (2–80 characters).';
       else if (field.name === 'phone' && !/^(?:\+?233|0)\d{9}$/.test(text.replace(/[\s()-]/g, ''))) nextErrors[field.name] = 'Enter a valid Ghana phone number.';
-      else if (field.name === 'password' && (text.length > 128 || (isRegistration && (text.length < 8 || !/[a-z]/.test(text) || !/[A-Z]/.test(text) || !/\d/.test(text) || !/[^A-Za-z\d]/.test(text))))) nextErrors[field.name] = isRegistration ? 'Use at least 8 characters with upper and lowercase letters, a number, and a symbol.' : 'Password is too long.';
+      else if (isPassword && (isRegistration ? !isValidPassword(value) : Array.from(value).length > 128)) nextErrors[field.name] = isRegistration ? 'Use 8–128 characters and avoid common passwords.' : 'Password is too long.';
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -56,6 +61,7 @@ export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit,
                 id={getControlItem.name}
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
+                maxLength={256}
                 aria-invalid={Boolean(errors[getControlItem.name])}
                 aria-describedby={errors[getControlItem.name] ? `${getControlItem.name}-error` : undefined}
                 value={value}
@@ -68,21 +74,22 @@ export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit,
               </button>
             </div>
           );
+        } else {
+          element = (
+            <Input
+              name={getControlItem.name}
+              placeholder={getControlItem.placeholder}
+              id={getControlItem.name}
+              type={getControlItem.type || 'text'}
+              aria-invalid={Boolean(errors[getControlItem.name])}
+              aria-describedby={errors[getControlItem.name] ? `${getControlItem.name}-error` : undefined}
+              value={value}
+              onBlur={() => validate(getControlItem.name)}
+              onChange={(e) => updateValue(getControlItem.name, e.target.value)}
+              className={`w-full rounded-lg border px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm bg-gray-50/50 focus:bg-white transition-all shadow-sm ${errors[getControlItem.name] ? 'border-red-500' : 'border-gray-300'}`}
+            />
+          );
         }
-        element = (
-          <Input 
-            name={getControlItem.name}
-            placeholder={getControlItem.placeholder}
-            id={getControlItem.name}
-            type={getControlItem.type || 'text'}
-            aria-invalid={Boolean(errors[getControlItem.name])}
-            aria-describedby={errors[getControlItem.name] ? `${getControlItem.name}-error` : undefined}
-            value={value}
-            onBlur={() => validate(getControlItem.name)}
-            onChange={(e) => updateValue(getControlItem.name, e.target.value)}
-            className={`w-full rounded-lg border px-3 py-2.5 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm bg-gray-50/50 focus:bg-white transition-all shadow-sm ${errors[getControlItem.name] ? 'border-red-500' : 'border-gray-300'}`}
-          />
-        );
         break;
 
       case "textarea":
@@ -122,6 +129,12 @@ export const CommonForms = ({ formControl = [], formData, setFormData, onSubmit,
               )}
               
               {renderInputType(controlItem)}
+              {controlItem.name === 'password' && isRegistration && <PasswordStrengthIndicator password={formData.password || ''} />}
+              {controlItem.name === 'password' && !isRegistration && failedLoginAttempts >= 2 && (
+                <Link to="/auth/forgot-password" className="mt-1 inline-flex min-h-10 items-center text-sm font-semibold text-indigo-600 underline underline-offset-2 hover:text-indigo-700">
+                  Forgot Password?
+                </Link>
+              )}
               {errors[controlItem.name] && <p id={`${controlItem.name}-error`} role="alert" className="text-xs text-red-600">{errors[controlItem.name]}</p>}
             </div>
           );

@@ -1,10 +1,9 @@
 import mongoose from "mongoose";
 import { Orders } from "../../modules/orderSchema.js";
 import { Product } from "../../modules/productSchema.js";
-import { buildOrderStatusEmail } from "../../utils/orderStatusEmail.js";
-import sendEmail from "../../utils/nodemailer.js";
 import { canTransitionOrderStatus } from "../../utils/orderStatusTransitions.js";
 import { CACHE_NAMESPACES, invalidateCacheNamespaces } from "../../utils/responseCache.js";
+import { enqueueOrderNotification } from '../../utils/orderNotificationOutbox.js';
 
 const fail = (statusCode, message) => {
   const error = new Error(message);
@@ -53,7 +52,7 @@ export const updateOrderStatusController = async (req, res, next) => {
           status,
           ...(status === "CANCELLED" ? { inventoryReleasedAt: new Date() } : {}),
         } },
-        { new: true, runValidators: true, session },
+        { returnDocument: 'after', runValidators: true, session },
       );
       if (!updatedOrder) fail(409, "The order changed while this update was being applied. Refresh and try again.");
 
@@ -92,26 +91,27 @@ export const updateOrderStatusController = async (req, res, next) => {
       );
     }
 
-    let emailSent = null;
+    let emailQueued = null;
     if (changed) {
       try {
-        if (!order.user?.email) throw new Error("The order customer does not have an email address.");
-        const email = buildOrderStatusEmail({ order, previousStatus, newStatus: status });
-        const result = await sendEmail({ to: order.user.email, ...email });
-        emailSent = Boolean(result?.success);
-        if (!emailSent) console.error("Order status notification was not delivered:", result?.error || "Unknown mailer error");
-      } catch (emailError) {
-        console.error("Failed to send order status email:", emailError);
-        emailSent = false;
+        await enqueueOrderNotification({
+          orderId: order._id,
+          eventKey: `order:${order._id}:status:${order.updatedAt ? new Date(order.updatedAt).getTime() : Date.now()}`,
+          type: 'STATUS_UPDATE',
+          data: { previousStatus, newStatus: status },
+        });
+        emailQueued = true;
+      } catch (error) {
+        emailQueued = false;
+        console.error('[order-email] status_enqueue_failed', JSON.stringify({ orderId: String(order._id), errorCode: error?.code || error?.name }));
       }
     }
 
     return res.status(200).json({
       success: true,
-      message: emailSent === false
-        ? "Order status updated, but the customer notification email could not be sent."
-        : "Order status updated",
-      emailSent,
+      message: "Order status updated",
+      emailSent: null,
+      emailQueued,
       order,
     });
   } catch (error) {

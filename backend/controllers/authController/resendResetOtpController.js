@@ -1,11 +1,13 @@
 import bcrypt from 'bcrypt';
+import { randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { Register } from '../../modules/userRegister.js';
 import { PasswordResetOTP } from '../../modules/passwordResetOTP.js';
-import sendEmail from '../../utils/nodemailer.js';
-import { escapeHtml } from '../../utils/escapeHtml.js';
+import { enqueuePasswordResetEmail, wakeEmailOutboxWorker } from '../../utils/emailOutbox.js';
 import { createResetOtp, hashResetSecret, RESET_OTP_TTL_MS, RESET_REQUESTS_PER_WINDOW, RESET_REQUEST_WINDOW_MS, getPasswordResetOtpEmail, verifyResetFlowId } from '../../utils/passwordReset.js';
 
 export const resendResetOtpController = async (req, res) => {
+  const startedAt = performance.now();
   try {
     const email = req.body.email.toLowerCase().trim();
     if (!verifyResetFlowId(req.body.flowId, email)) {
@@ -33,23 +35,45 @@ export const resendResetOtpController = async (req, res) => {
       filter.requestWindowStartedAt = record.requestWindowStartedAt;
       update.$set.requestCount = 1;
     }
-    const result = await sendEmail({ to: user.email, subject: 'Your new Asa Phones password reset code', text: `Your password reset code is ${otp}. It expires in 5 minutes. Do not share this code.`, html: getPasswordResetOtpEmail({ userName: escapeHtml(user.userName), otp, expiresMinutes: 5 }) });
-    // Do not invalidate the current code or consume a resend slot until the
-    // mail provider has accepted the new code. Otherwise a transient email
-    // failure leaves the user with no usable code while this endpoint still
-    // returns its privacy-preserving generic response.
-    if (!result?.success) {
-      console.error('Password reset email delivery failed.');
-      return res.status(200).json(generic);
-    }
     const updated = await PasswordResetOTP.findOneAndUpdate(filter, update, { returnDocument: "after" });
     if (!updated) {
-      console.error('Password reset resend state changed before the new code could be saved.');
       return res.status(200).json(generic);
     }
+    const verificationUrl = new URL('/auth/verify-reset-otp', (process.env.FRONTEND_ORIGIN || 'http://localhost:5173').split(',')[0].trim());
+    verificationUrl.hash = new URLSearchParams({ flowId: req.body.flowId }).toString();
+    try {
+      await enqueuePasswordResetEmail({
+        requestId: randomUUID(),
+        userId: user._id,
+        otpHash,
+        message: {
+          to: user.email,
+          subject: 'Your new Asa Phones password reset code',
+          text: `Your password reset code is ${otp}. It expires in 5 minutes. Do not share this code.\n${verificationUrl}`,
+          html: getPasswordResetOtpEmail({ userName: user.userName || 'Customer', otp, expiresMinutes: 5, verificationUrl: verificationUrl.toString() }),
+        },
+      });
+      if (process.env.NODE_ENV !== 'test') wakeEmailOutboxWorker();
+    } catch (queueError) {
+      await PasswordResetOTP.updateOne(
+        { _id: record._id, otpHash },
+        { $set: {
+          otpHash: record.otpHash,
+          otpExpiresAt: record.otpExpiresAt,
+          otpAttempts: record.otpAttempts,
+          authorizationHash: record.authorizationHash,
+          authorizationExpiresAt: record.authorizationExpiresAt,
+          requestCount: record.requestCount,
+          requestWindowStartedAt: record.requestWindowStartedAt,
+          expiresAt: record.expiresAt,
+        } },
+      );
+      throw queueError;
+    }
+    console.info('[performance] password_reset_resend', JSON.stringify({ requestId: req.id, result: 'email_queued', totalMs: Number((performance.now() - startedAt).toFixed(1)) }));
     return res.status(200).json(generic);
   } catch (error) {
-    console.error('Password reset resend failed:', error?.message || 'Unknown error');
+    console.error('[password-reset] resend_failed', JSON.stringify({ requestId: req.id, errorCode: error?.code || error?.name || 'request_failed' }));
     return res.status(200).json({ success: true, message: 'If an active password reset exists, a new verification code has been sent.' });
   }
 };

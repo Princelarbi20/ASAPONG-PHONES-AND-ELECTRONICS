@@ -91,6 +91,11 @@ export const shopRequestSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  consecutiveLockouts: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   lockUntil: {
     type: Date,
     default: null

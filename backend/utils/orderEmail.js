@@ -1,7 +1,6 @@
 import { Orders } from '../modules/orderSchema.js';
-import sendEmail from './nodemailer.js';
+import sendEmail from './emailTransport.js';
 
-const CURRENCY_SYMBOL = 'GH₵';
 
 const esc = (value) =>
   String(value ?? '')
@@ -11,10 +10,10 @@ const esc = (value) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-const money = (n) => `${CURRENCY_SYMBOL}${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
+const money = (n) => `GHS ${(Number(n) || 0).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const buildItemsHtml = (order, logo) =>
-  order.items
+  (order.items || [])
     .map((item) => {
       const imageUrl = item.image || logo || 'https://via.placeholder.com/60?text=Product';
       return `
@@ -35,10 +34,12 @@ const buildItemsHtml = (order, logo) =>
     .join('');
 
 export const buildCashOnDeliveryOrderEmail = (order) => {
-  const customerName = esc(order.user?.userName || 'Valued Customer');
+  const customerName = esc(order.user?.userName || order.customerName || 'Valued Customer');
   const logo = process.env.CLOUDINARY_LOG || '';
   const addr = order.shippingAddress || {};
   const reference = order.orderNumber || order._id;
+  const subtotal = (order.items || []).reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.quantity) || 0), 0);
+  const deliveryCharges = Math.max(0, (Number(order.totalPrice) || 0) - subtotal);
   const itemLines = (order.items || []).map((item) =>
     `- ${item.name || 'Product'} x ${Number(item.quantity) || 0}: ${money((Number(item.price) || 0) * (Number(item.quantity) || 0))}`
   ).join('\n');
@@ -58,6 +59,14 @@ export const buildCashOnDeliveryOrderEmail = (order) => {
       <tbody>
         ${buildItemsHtml(order, logo)}
         <tr style="background-color: #f9fafb;">
+          <td colspan="2" style="padding: 12px; font-weight: 600; color: #111827;">Subtotal</td>
+          <td align="right" style="padding: 12px; font-weight: 600; color: #111827;">${money(subtotal)}</td>
+        </tr>
+        <tr style="background-color: #f9fafb;">
+          <td colspan="2" style="padding: 12px; font-weight: 600; color: #111827;">Delivery charges</td>
+          <td align="right" style="padding: 12px; font-weight: 600; color: #111827;">${money(deliveryCharges)}</td>
+        </tr>
+        <tr style="background-color: #f9fafb;">
           <td colspan="2" style="padding: 12px; font-weight: 700; color: #111827;">Total due on delivery</td>
           <td align="right" style="padding: 12px; font-weight: 800; color: #4f46e5; font-size: 16px;">${money(order.totalPrice)}</td>
         </tr>
@@ -71,13 +80,15 @@ export const buildCashOnDeliveryOrderEmail = (order) => {
   `;
 
   return {
-    subject: `Order received — Cash on Delivery #${reference}`,
+    subject: `Order received - Cash on Delivery #${reference}`,
     html: layout({ logo, body }),
     text: [
-      `Hello ${order.user?.userName || 'Valued Customer'},`,
+      `Hello ${order.user?.userName || order.customerName || 'Valued Customer'},`,
       'We received your order with Asapong. It is awaiting confirmation from our team.',
       'Payment method: Cash on Delivery. This order has not been paid for.',
       `Amount due on delivery: ${money(order.totalPrice)}`,
+      `Subtotal: ${money(subtotal)}`,
+      `Delivery charges: ${money(deliveryCharges)}`,
       `Order reference: #${reference}`,
       'Items:', itemLines,
       `Delivery address: ${[addr.address, addr.city, addr.state, addr.postalCode, addr.country].filter(Boolean).join(', ')}`,
@@ -145,13 +156,14 @@ const loadOrderForEmail = async (orderId) => {
 // ---------------------------------------------------------------------------
 // Payment successful
 // ---------------------------------------------------------------------------
-export const sendOrderConfirmationEmail = async (orderId) => {
-  console.log(`[email] Preparing confirmation for order ${orderId}`);
-
-  const { order, recipientEmail } = await loadOrderForEmail(orderId);
-  const customerName = esc(order.user?.userName || 'Valued Customer');
+export const buildPaymentConfirmationEmail = (order, { reference, amount, paymentMethod } = {}) => {
+  const customerName = esc(order.user?.userName || order.customerName || 'Valued Customer');
   const logo = process.env.CLOUDINARY_LOG || '';
-  const addr = order.shippingAddress;
+  const addr = order.shippingAddress || {};
+  const orderReference = order.orderNumber || order._id;
+  const paymentReference = reference || order.paymentDetails?.reference || 'Unavailable';
+  const amountPaid = amount ?? order.paymentDetails?.amount ?? order.totalPrice;
+  const method = paymentMethod || order.paymentDetails?.channel || order.paymentDetails?.provider || 'Paystack';
 
   const body = `
     <h2 style="color: #111827; margin: 0 0 14px 0; font-size: 18px; font-weight: 700;">Hello ${customerName},</h2>
@@ -167,7 +179,9 @@ export const sendOrderConfirmationEmail = async (orderId) => {
 
     <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; margin-bottom: 20px;">
       <span style="color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Order Reference</span><br />
-      <span style="color: #4f46e5; font-size: 16px; font-weight: 700;">#${order._id}</span>
+      <span style="color: #4f46e5; font-size: 16px; font-weight: 700;">#${esc(orderReference)}</span><br />
+      <span style="color: #4b5563; font-size: 13px;">Payment reference: ${esc(paymentReference)}</span><br />
+      <span style="color: #4b5563; font-size: 13px;">Payment method: ${esc(method)}</span>
     </div>
 
     <h3 style="color: #111827; margin: 0 0 10px 0; font-size: 15px; font-weight: 700;">Order Items</h3>
@@ -175,8 +189,8 @@ export const sendOrderConfirmationEmail = async (orderId) => {
       <tbody>
         ${buildItemsHtml(order, logo)}
         <tr style="background-color: #f9fafb;">
-          <td colspan="2" style="padding: 12px; font-weight: 700; color: #111827;">Total Amount Paid</td>
-          <td align="right" style="padding: 12px; font-weight: 800; color: #4f46e5; font-size: 16px;">${money(order.totalPrice)}</td>
+          <td colspan="2" style="padding: 12px; font-weight: 700; color: #111827;">Amount Paid</td>
+          <td align="right" style="padding: 12px; font-weight: 800; color: #4f46e5; font-size: 16px;">${money(amountPaid)}</td>
         </tr>
       </tbody>
     </table>
@@ -196,17 +210,24 @@ export const sendOrderConfirmationEmail = async (orderId) => {
     </p>
   `;
 
-  console.log(`[email] Sending confirmation to ${recipientEmail}`);
-  const result = await sendEmail({
-    to: recipientEmail,
-    subject: 'Payment Received – Your Order is Confirmed!',
+  return {
+    subject: `Payment received - Order #${orderReference}`,
+    text: [
+      `Hello ${order.user?.userName || order.customerName || 'Valued Customer'},`,
+      `Payment confirmed for order #${orderReference}.`,
+      `Payment reference: ${paymentReference}`,
+      `Amount paid: ${money(amountPaid)}`,
+      `Payment method: ${method}`,
+      `Items: ${(order.items || []).map((item) => `${item.name} x ${item.quantity}`).join(', ')}`,
+    ].join('\n'),
     html: layout({ logo, body }),
-  });
-  console.log(`[email] Confirmation sent for order ${orderId}`, result?.messageId || '');
-  return result;
+  };
 };
 
-// ---------------------------------------------------------------------------
+export const sendOrderConfirmationEmail = async (orderId, paymentDetails = {}) => {
+  const { order, recipientEmail } = await loadOrderForEmail(orderId);
+  return sendEmail({ to: recipientEmail, ...buildPaymentConfirmationEmail(order, paymentDetails) });
+};
 // Payment failed / reversed
 // ---------------------------------------------------------------------------
 export const getPaymentFailureRetryUrl = () => `${process.env.CLIENT_URL || process.env.FRONTEND_ORIGIN}/my-orders`;

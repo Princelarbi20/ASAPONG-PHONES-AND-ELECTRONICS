@@ -57,7 +57,9 @@ const Login = () => {
     } catch (error) {
       // Extract backend response error message
       const serverMessage = error.response?.data?.message || 'Login failed. Please try again.';
+      let failedCount = failedLoginAttempts;
       if (error.response?.status === 401) {
+        failedCount += 1;
         setFailedLoginAttempts((attempts) => attempts + 1);
       }
 
@@ -73,7 +75,9 @@ const Login = () => {
       } else if (error.response?.status === 403) {
         toast.error(serverMessage, errorToastStyle);
       } else if (error.response?.status === 401) {
-        toast.error(serverMessage, errorToastStyle);
+        const attemptsRemaining = error.response?.data?.remainingAttempts ?? Math.max(0, 7 - failedCount);
+        const attemptsLabel = attemptsRemaining === 1 ? 'attempt' : 'attempts';
+        toast.error(`${serverMessage} ${attemptsRemaining} ${attemptsLabel} remaining.`, errorToastStyle);
       } else {
         toast.error(serverMessage, errorToastStyle);
       }
@@ -102,15 +106,8 @@ const Login = () => {
             setFormData={setFormData}
             onSubmit={handleSubmit}
             buttonText={isLoading ? 'Signing in...' : 'Sign In'}
+            failedLoginAttempts={failedLoginAttempts}
           />
-          {failedLoginAttempts >= 3 && (
-            <p className="mt-3 text-center text-sm text-slate-600">
-              Forgotten password?{' '}
-              <Link to="/auth/forgot-password" className="font-semibold text-indigo-600 underline underline-offset-2 hover:text-indigo-700">
-                Reset it here
-              </Link>
-            </p>
-          )}
         </div>
 
         <div className="pt-2 border-t border-gray-100 text-center shrink-0 space-y-1.5">

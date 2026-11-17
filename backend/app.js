@@ -22,11 +22,16 @@ import { validateRequest } from './middleware/requestValidation.js';
 import { assertTestEnvironment } from './config/environmentSafety.js';
 import { randomUUID } from 'node:crypto';
 import { startEmailOutboxWorker } from './utils/emailOutbox.js';
+import { startOrderNotificationWorker } from './utils/orderNotificationOutbox.js';
 import { startOrderExpiryWorker } from './utils/orderExpiryWorker.js';
 import { startPaystackRefundWorker } from './utils/paystackRefunds.js';
 import { PaystackRefund } from './modules/paystackRefundSchema.js';
+import { OrderNotificationOutbox } from './modules/orderNotificationOutbox.js';
 import { getTrustedOrigins } from './config/trustedOrigins.js';
+import { AuthAuditLog } from './modules/authAuditLog.js';
 const app = express();
+// Render terminates TLS through one trusted reverse proxy; req.ip is used by the login limiter and audit trail.
+app.set('trust proxy', 1);
 assertTestEnvironment();
 
 
@@ -108,7 +113,7 @@ app.use((req, res, next) => {
   req.requestStartedAt = performance.now();
   res.setHeader('X-Request-ID', req.id);
   res.on('finish', () => {
-    if (/\/(?:user-register|verify-otp|resend-otp)$/.test(req.path)) {
+    if (/\/(?:user-register|verify-otp|resend-otp|forgot-password|verify-reset-otp|resend-reset-otp|reset-password)$/.test(req.path)) {
       console.info('[performance] auth_request', JSON.stringify({
         requestId: req.id,
         route: req.path,
@@ -151,7 +156,10 @@ const startServer = async () => {
     // The unique paymentAttempt index is the final database guard against
     // multiple refund records being created by simultaneous workers.
     await PaystackRefund.createIndexes();
+    await OrderNotificationOutbox.createIndexes();
+    await AuthAuditLog.createIndexes();
     startEmailOutboxWorker();
+    startOrderNotificationWorker();
     startOrderExpiryWorker();
     startPaystackRefundWorker();
     app.listen(PORT, "0.0.0.0", () => {

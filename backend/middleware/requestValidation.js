@@ -1,4 +1,7 @@
 import { cleanupPartialUploads } from '../utils/uploadCleanup.js';
+import { isValidPassword } from '../../shared/passwordPolicy.js';
+
+export { isValidPassword };
 
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value) && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
@@ -10,8 +13,6 @@ export const isValidPhone = (value) => {
   const digits = value.replace(/[\s()-]/g, '');
   return /^\+?\d{10,13}$/.test(digits) && (digits.length === 10 || digits.startsWith('+233') && digits.length === 13 || digits.startsWith('233') && digits.length === 12);
 };
-export const isValidPassword = (value) => typeof value === 'string' && value.length >= 8 && value.length <= 128 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value) && /[^A-Za-z\d]/.test(value);
-
 const nonEmptyString = (max, min = 1) => (value) =>
   typeof value === 'string' && value.trim().length >= min && value.trim().length <= max;
 const enumOf = (...allowed) => (value) => typeof value === 'string' && allowed.includes(value);
@@ -43,7 +44,7 @@ const optional = (validator) => (value) => value === undefined || validator(valu
 export const validators = {
   email: (value) => isValidEmail(value),
   phone: (value) => isValidPhone(value),
-  password: (value) => isValidPassword(value),
+  password: isValidPassword,
   name: (value) => nonEmptyString(80, 2)(value) && /^[\p{L}\p{M}][\p{L}\p{M} .'-]*$/u.test(value.trim()),
   shortText: nonEmptyString(120),
   longText: nonEmptyString(5000),

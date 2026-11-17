@@ -1,7 +1,8 @@
 
 import { ShopRequest } from "../../modules/shopRequestSchema.js";
-import bcrypt from 'bcrypt';
 import { commitUploadedFiles } from '../../utils/uploadCleanup.js';
+import { hashPassword } from '../../utils/passwordHash.js';
+import { isValidPassword } from '../../../shared/passwordPolicy.js';
 
 export const createShopRequest = async (req, res, next) => {
   try {
@@ -16,6 +17,7 @@ export const createShopRequest = async (req, res, next) => {
         message: 'All fields are required.'
       });
     }
+    if (!isValidPassword(password)) return res.status(400).json({ success: false, message: 'Password must be 8–128 characters and cannot be a commonly used password.' });
 
     // 1. Verify if the file middleware processed any files (using req.files)
     if (!req.files || req.files.length === 0) {
@@ -67,7 +69,7 @@ export const createShopRequest = async (req, res, next) => {
     });
 
     // 6. Create the Document without forcing an owner relationship
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await hashPassword(password, 10);
     const newRequest = await ShopRequest.create({
       shopName,
       description,
